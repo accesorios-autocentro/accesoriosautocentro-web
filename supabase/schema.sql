@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- ----------------------------------------------------------------------------
 -- 1. Helper de autorización Admin (RLS + RPCs)
 -- Coincide con la lista blanca del panel de control:
+--   - accesoriosautocentro@gmail.com
 --   - leoneldariogarcia@gmail.com
 --   - carlitos@carlitosautopartes.com
 --   - cualquier usuario con dominio @carlitosautopartes.com
@@ -21,6 +22,7 @@ SET search_path = public
 AS $$
   SELECT auth.role() = 'authenticated' AND (
     LOWER(COALESCE(auth.jwt() ->> 'email', '')) IN (
+      'accesoriosautocentro@gmail.com',
       'leoneldariogarcia@gmail.com',
       'carlitos@carlitosautopartes.com'
     )

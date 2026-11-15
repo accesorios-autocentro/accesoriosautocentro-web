@@ -28,8 +28,9 @@ import {
 
 // --- DYNAMIC SECURITY ALLOWLIST (Emails autorizados) ---
 const CORREOS_AUTORIZADOS = [
-  "leoneldariogarcia@gmail.com", // Administrador principal
-  "carlitos@carlitosautopartes.com" // Usuario simplificado "carlitos"
+  "accesoriosautocentro@gmail.com", // Administrador principal Accesorios Autocentro
+  "leoneldariogarcia@gmail.com",
+  "carlitos@carlitosautopartes.com"
 ];
 
 // --- DOM REFERENCES ---
