@@ -1003,12 +1003,12 @@
         return;
       }
       document.getElementById('diagnostico-error-box').style.display = 'block';
-      const msg = e.message || 'Error de carga/importación de recurso (ej. Firebase CDN)';
+      const msg = e.message || 'Error de carga/importación de recurso (ej. Supabase CDN)';
       const source = e.filename ? ('\nArchivo: ' + e.filename + '\nLínea: ' + e.lineno) : '';
       document.getElementById('diagnostico-error-content').textContent += '\n[ERROR] ' + msg + source;
     }, true); // Use capture phase to catch resource loading errors too
 
-    // Captura promesas rechazadas (como fallas del SDK de Firebase Auth)
+    // Captura promesas rechazadas (como fallas del SDK de Supabase Auth)
     window.addEventListener('unhandledrejection', function(e) {
       document.getElementById('diagnostico-error-box').style.display = 'block';
       const reason = e.reason;
@@ -2098,7 +2098,7 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
-  <!-- Firebase Connection via script modules -->
-  <script type="module" src="control.js?v=16"></script>
+  <!-- Supabase Connection via script modules -->
+  <script type="module" src="control.js?v=17"></script>
 </body>
 </html>

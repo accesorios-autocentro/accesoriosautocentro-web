@@ -1,22 +1,5 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { escapeHtml } from "./erp-logic.mjs?v=1";
-
-// --- FIREBASE WEB SDK INITIALIZATION ---
-const firebaseConfig = {
-  projectId: "carlitos-autopartes",
-  appId: "1:857884800045:web:19badd1649ae17712734a4",
-  storageBucket: "carlitos-autopartes.firebasestorage.app",
-  apiKey: "AIzaSyCgeSNL_oFVBK6UElLTtwnPWXAaogBTcDI",
-  authDomain: window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
-    ? "carlitos-autopartes.firebaseapp.com" 
-    : window.location.hostname,
-  messagingSenderId: "857884800045",
-  projectNumber: "857884800045"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+import { supabase, productFromRow } from "./supabase-client.js?v=1";
+import { escapeHtml } from "./erp-logic.mjs?v=2";
 
 // --- MAIN APPLICATION LOGIC ---
 document.addEventListener("DOMContentLoaded", () => {
@@ -100,25 +83,42 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // --- SUBSCRIBE TO LIVE FIRESTORE COLLECTION ---
-  function subscribeToCatalog() {
-    onSnapshot(collection(db, "products"), (snapshot) => {
-      const items = [];
-      snapshot.forEach(doc => {
-        items.push(doc.data());
-      });
-      
-      // Update local catalog reactive state
-      products = items;
+  // --- LOAD CATALOG & SUBSCRIBE TO REALTIME SUPABASE UPDATES ---
+  async function loadCatalogFromSupabase() {
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .order("updated_at", { ascending: false });
 
-      // Refresh selectors & grid reactively
-      populateBrandFilter();
-      updateCategoryCounts();
-      renderProducts();
-      renderCart();
-    }, (err) => {
-      console.error("Error en la suscripción de Firestore en tiempo real:", err);
-    });
+    if (error) {
+      console.error("Error al cargar catálogo de Supabase:", error);
+      return;
+    }
+
+    products = (data || []).map(productFromRow);
+    populateBrandFilter();
+    updateCategoryCounts();
+    renderProducts();
+    renderCart();
+  }
+
+  function subscribeToCatalog() {
+    loadCatalogFromSupabase();
+
+    supabase
+      .channel("public:products-storefront")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        () => {
+          loadCatalogFromSupabase();
+        }
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.error("Error en la suscripción Realtime de Supabase para products.");
+        }
+      });
   }
 
   function bindEventListeners() {

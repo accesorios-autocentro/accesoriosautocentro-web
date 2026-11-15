@@ -1,23 +1,11 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { 
-  getAuth, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged 
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  setDoc, 
-  doc, 
-  deleteDoc, 
-  updateDoc, 
-  onSnapshot, 
-  writeBatch,
-  increment,
-  runTransaction
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import {
+  supabase,
+  productFromRow,
+  invoiceFromRow,
+  checkFromRow,
+  contactFromRow,
+  paymentFromRow
+} from "./supabase-client.js?v=1";
 import {
   round2,
   escapeHtml,
@@ -37,24 +25,6 @@ import {
   computeFinancialReport,
   filterProducts
 } from "./erp-logic.mjs?v=2";
-
-
-// --- FIREBASE WEB SDK INITIALIZATION ---
-const firebaseConfig = {
-  projectId: "carlitos-autopartes",
-  appId: "1:857884800045:web:19badd1649ae17712734a4",
-  storageBucket: "carlitos-autopartes.firebasestorage.app",
-  apiKey: "AIzaSyCgeSNL_oFVBK6UElLTtwnPWXAaogBTcDI",
-  authDomain: window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
-    ? "carlitos-autopartes.firebaseapp.com" 
-    : window.location.hostname,
-  messagingSenderId: "857884800045",
-  projectNumber: "857884800045"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
 
 // --- DYNAMIC SECURITY ALLOWLIST (Emails autorizados) ---
 const CORREOS_AUTORIZADOS = [
@@ -110,55 +80,74 @@ const adminResetFilters = document.getElementById("admin-reset-filters");
 // --- INITIAL STATES & SETUP ---
 let imgbbApiKey = localStorage.getItem("autocentro_imgbb_key") || "3e8f85f1c4e77248e3e44ebf996d99df";
 let allProducts = [];
-let catalogUnsubscribe = null;
+let catalogChannel = null;
+let erpChannel = null;
+let activeUserEmail = null;
 
 // ERP Mini-System Global State
 let allInvoices = [];
 let allChecks = [];
 let allContacts = [];
 let allPayments = [];
-let invoicesUnsubscribe = null;
-let checksUnsubscribe = null;
-let contactsUnsubscribe = null;
-let paymentsUnsubscribe = null;
 let currentCheckingSubtab = "clients"; // "clients" or "suppliers"
 
-// --- AUTHENTICATION STATE OBSERVER ---
-onAuthStateChanged(auth, (user) => {
+function unsubscribeAllRealtime() {
+  if (catalogChannel) {
+    supabase.removeChannel(catalogChannel);
+    catalogChannel = null;
+  }
+  if (erpChannel) {
+    supabase.removeChannel(erpChannel);
+    erpChannel = null;
+  }
+}
+
+async function applyAuthUser(user) {
   if (user) {
     const userEmail = user.email ? user.email.toLowerCase().trim() : "";
-    
+
     // 🛡️ Verify if the user is in the Authorized Allowlist or has the admin domain suffix
     const isAllowed = CORREOS_AUTORIZADOS.map(email => email.toLowerCase().trim()).includes(userEmail) ||
                       userEmail.endsWith("@carlitosautopartes.com");
-    
+
     if (isAllowed) {
+      if (activeUserEmail === userEmail) return;
+      activeUserEmail = userEmail;
+
       // Access Granted!
       loginView.style.display = "none";
       adminView.style.display = "block";
       userEmailTag.textContent = user.email.split("@")[0]; // Muestra el nombre de usuario limpio
-      
+
       // Initialize tabs navigation
       initERPTabs();
 
-      // Subscribe to Firestore catalog updates & ERP data
+      // Load initial data & subscribe to Supabase Realtime updates
       subscribeToCatalog();
       subscribeToERP();
     } else {
-      // Access Denied!
-      signOut(auth);
+      activeUserEmail = null;
+      await supabase.auth.signOut();
       showToast("Acceso denegado: este usuario no está autorizado.", "error");
     }
   } else {
-    // Admin is logged out
+    activeUserEmail = null;
     loginView.style.display = "flex";
     adminView.style.display = "none";
-    if (catalogUnsubscribe) catalogUnsubscribe();
-    if (invoicesUnsubscribe) invoicesUnsubscribe();
-    if (checksUnsubscribe) checksUnsubscribe();
-    if (contactsUnsubscribe) contactsUnsubscribe();
-    if (paymentsUnsubscribe) paymentsUnsubscribe();
+    unsubscribeAllRealtime();
   }
+}
+
+// --- AUTHENTICATION STATE OBSERVER ---
+supabase.auth.getSession().then(({ data, error }) => {
+  if (error) {
+    console.error("Error obteniendo sesión de Supabase:", error);
+  }
+  applyAuthUser(data?.session?.user || null);
+});
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  applyAuthUser(session?.user || null);
 });
 
 
@@ -169,7 +158,7 @@ loginForm.addEventListener("submit", async (e) => {
   const usernameVal = loginUsername.value.trim();
   const passwordVal = loginPassword.value;
 
-  // Si el usuario ingresa un nombre simple (ej. "carlitos"), lo convertimos internamente en un correo válido para Firebase
+  // Si el usuario ingresa un nombre simple (ej. "carlitos"), lo convertimos internamente en un correo válido
   let emailVal = usernameVal;
   if (!emailVal.includes("@")) {
     emailVal = `${usernameVal.toLowerCase()}@carlitosautopartes.com`;
@@ -177,19 +166,24 @@ loginForm.addEventListener("submit", async (e) => {
 
   try {
     showToast("Iniciando sesión...", "info");
-    await signInWithEmailAndPassword(auth, emailVal, passwordVal);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: emailVal,
+      password: passwordVal
+    });
+    if (error) throw error;
     showToast("¡Ingreso exitoso!", "success");
   } catch (err) {
     console.error("Error al iniciar sesión:", err);
+    const msg = (err.message || "").toLowerCase();
     let errorMsg = "Usuario o contraseña incorrectos.";
-    if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
-      errorMsg = "Usuario o contraseña incorrectos.";
-    } else if (err.code === "auth/invalid-credential") {
-      errorMsg = "Credenciales incorrectas. Verificá los datos.";
-    } else if (err.code === "auth/operation-not-allowed") {
-      errorMsg = "El inicio de sesión por correo y contraseña no está habilitado en tu consola Firebase.";
-    } else if (err.code === "auth/too-many-requests") {
+    if (msg.includes("invalid login credentials")) {
+      errorMsg = "Credenciales incorrectas. Verificá usuario y contraseña.";
+    } else if (msg.includes("email not confirmed")) {
+      errorMsg = "El correo todavía no está confirmado en Supabase Auth.";
+    } else if (msg.includes("too many requests") || err.status === 429) {
       errorMsg = "Acceso bloqueado temporalmente por demasiados intentos fallidos.";
+    } else if (err.message) {
+      errorMsg = err.message;
     }
     showToast(errorMsg, "error");
   }
@@ -197,7 +191,7 @@ loginForm.addEventListener("submit", async (e) => {
 
 logoutBtn.addEventListener("click", async () => {
   try {
-    await signOut(auth);
+    await supabase.auth.signOut();
     showToast("Has cerrado sesión.", "info");
   } catch (err) {
     console.error("Error al salir:", err);
@@ -294,23 +288,28 @@ productForm.addEventListener("submit", async (e) => {
       updated_at: new Date().toISOString()
     };
 
-    // 2. Add or Update in Firestore
+    // 2. Add or Update in Supabase
     if (id) {
       // Edit mode
-      await setDoc(doc(db, "products", id), productData, { merge: true });
+      const { error } = await supabase
+        .from("products")
+        .update(productData)
+        .eq("id", id);
+      if (error) throw error;
       showToast(`¡Repuesto "${name}" actualizado!`, "success");
     } else {
       // Add new mode
-      await addDoc(collection(db, "products"), {
-        ...productData,
-        id: "", // placeholder, will fill below
-        created_at: new Date().toISOString()
-      }).then(async (docRef) => {
-        // Self-reference id field for easier client queries
-        await updateDoc(docRef, { id: docRef.id });
-      });
+      const { error } = await supabase
+        .from("products")
+        .insert({
+          ...productData,
+          created_at: new Date().toISOString()
+        });
+      if (error) throw error;
       showToast(`¡Repuesto "${name}" cargado al catálogo!`, "success");
     }
+
+    await loadCatalogFromSupabase();
 
     // 3. Reset UI state
     resetFormState();
@@ -385,7 +384,9 @@ async function deleteProduct(id, name) {
   if (confirm(`¿Estás seguro de que deseas eliminar permanentemente de la tienda a:\n"${name}"?`)) {
     try {
       showToast("Eliminando producto...", "info");
-      await deleteDoc(doc(db, "products", id));
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) throw error;
+      await loadCatalogFromSupabase();
       showToast(`¡"${name}" eliminado con éxito!`, "success");
     } catch (err) {
       console.error("Error al eliminar repuesto:", err);
@@ -397,10 +398,16 @@ async function deleteProduct(id, name) {
 // --- INLINE FAST UPDATES FOR PRICES AND STOCK ---
 async function saveInlineUpdate(id, price, stock, name) {
   try {
-    await updateDoc(doc(db, "products", id), {
-      price: parseFloat(price),
-      stock: parseInt(stock)
-    });
+    const { error } = await supabase
+      .from("products")
+      .update({
+        price: parseFloat(price),
+        stock: parseInt(stock, 10),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id);
+    if (error) throw error;
+    await loadCatalogFromSupabase();
     showToast(`Valores rápidos de "${name}" actualizados.`, "success");
   } catch (err) {
     console.error("Error en actualización rápida:", err);
@@ -408,35 +415,53 @@ async function saveInlineUpdate(id, price, stock, name) {
   }
 }
 
-// --- SUBSCRIBE TO LIVE FIRESTORE DATABASE ---
-function subscribeToCatalog() {
-  if (catalogUnsubscribe) {
-    catalogUnsubscribe();
+// --- LOAD & SUBSCRIBE TO LIVE SUPABASE DATABASE ---
+async function loadCatalogFromSupabase() {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.error("Error en carga de productos desde Supabase:", error);
+    showToast("Error cargando base de datos. Comprobá conexión.", "error");
+    return;
   }
 
-  catalogUnsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
-    // If database is completely empty, suggest seed migration
-    if (snapshot.empty) {
-      allProducts = [];
-      adminResultsCount.textContent = "Base de datos vacía (0 productos)";
-      renderSeedMigrationOffer();
-      return;
-    }
+  const prods = (data || []).map(productFromRow);
+  if (prods.length === 0) {
+    allProducts = [];
+    adminResultsCount.textContent = "Base de datos vacía (0 productos)";
+    renderSeedMigrationOffer();
+    return;
+  }
 
-    const prods = [];
-    snapshot.forEach(doc => {
-      prods.push(doc.data());
+  allProducts = prods;
+  applyAdminFilters();
+}
+
+function subscribeToCatalog() {
+  if (catalogChannel) {
+    supabase.removeChannel(catalogChannel);
+    catalogChannel = null;
+  }
+
+  loadCatalogFromSupabase();
+
+  catalogChannel = supabase
+    .channel("admin:products")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "products" },
+      () => {
+        loadCatalogFromSupabase();
+      }
+    )
+    .subscribe((status) => {
+      if (status === "CHANNEL_ERROR") {
+        console.error("Error en suscripción en vivo de products (Supabase Realtime).");
+      }
     });
-
-    // Sort by updated_at or created_at descending (newest first)
-    prods.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
-
-    allProducts = prods;
-    applyAdminFilters();
-  }, (err) => {
-    console.error("Error en suscripción en vivo:", err);
-    showToast("Error cargando base de datos. Comprobá conexión.", "error");
-  });
 }
 
 // --- APPLY LIVE FILTERS FOR ADMIN CATALOG ---
@@ -533,7 +558,7 @@ function renderSeedMigrationOffer() {
     <div style="padding: var(--spacing-lg); text-align: center; background-color: var(--bg-surface); border-radius: var(--radius-md); border: 2px dashed var(--accent-yellow);">
       <h4 style="color: var(--primary-navy); margin-block-end: 8px;">¡Base de datos vacía detectada!</h4>
       <p style="font-size: 0.8rem; color: var(--text-secondary); margin-block-end: 16px;">
-        Para ayudarte a empezar rápidamente, podemos migrar de forma automática los 15 repuestos muestra iniciales directamente a tu base de datos Firestore en vivo.
+        Para ayudarte a empezar rápidamente, podemos migrar de forma automática los 15 repuestos muestra iniciales directamente a tu base de datos Supabase en vivo.
       </p>
       <button id="run-migration-btn" class="admin-btn admin-btn-accent" style="margin: 0 auto;">
         <span>Migrar 15 Productos de Muestra</span>
@@ -747,24 +772,21 @@ function renderSeedMigrationOffer() {
         }
       ];
 
-      const batch = writeBatch(db);
+      const nowIso = new Date().toISOString();
+      const rows = seedProducts.map(prod => ({
+        ...prod,
+        created_at: nowIso,
+        updated_at: nowIso
+      }));
 
-      seedProducts.forEach(prod => {
-        const docRef = doc(collection(db, "products"));
-        batch.set(docRef, {
-          ...prod,
-          id: docRef.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-      });
+      const { error } = await supabase.from("products").insert(rows);
+      if (error) throw error;
 
-      await batch.commit();
       showToast("¡Migración de muestra completada con éxito!", "success");
-      subscribeToCatalog();
+      await loadCatalogFromSupabase();
     } catch (err) {
       console.error("Error al migrar catálogo:", err);
-      showToast("Error subiendo datos muestra a Firestore.", "error");
+      showToast("Error subiendo datos muestra a Supabase.", "error");
       
       // Mostrar el error técnico exacto en la caja de diagnóstico para soporte técnico
       const diagBox = document.getElementById("diagnostico-error-box");
@@ -875,66 +897,88 @@ function initERPTabs() {
   initPrintModal();
 }
 
-// --- REAL-TIME FIRESTORE SUBSCRIPTION FOR ALL ERP COLLECTIONS ---
+// --- LOAD & REAL-TIME SUPABASE SUBSCRIPTION FOR ALL ERP TABLES ---
+async function loadInvoices() {
+  const { data, error } = await supabase.from("invoices").select("*");
+  if (error) {
+    console.error("Error al cargar comprobantes:", error);
+    return;
+  }
+  const list = (data || []).map(invoiceFromRow);
+  list.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0));
+  allInvoices = list;
+
+  renderSalesTable();
+  renderPurchasesTable();
+  renderCheckingAccounts();
+  calculateFinancialReport();
+  updateCheckingKPIs();
+}
+
+async function loadChecks() {
+  const { data, error } = await supabase.from("checks").select("*");
+  if (error) {
+    console.error("Error al cargar cartera de cheques:", error);
+    return;
+  }
+  const list = (data || []).map(checkFromRow);
+  list.sort((a, b) => new Date(b.dueDate || 0) - new Date(a.dueDate || 0));
+  allChecks = list;
+
+  renderChecksTable();
+  populateCheckSelects();
+  calculateFinancialReport();
+}
+
+async function loadContacts() {
+  const { data, error } = await supabase.from("contacts").select("*");
+  if (error) {
+    console.error("Error al cargar contactos:", error);
+    return;
+  }
+  allContacts = (data || []).map(contactFromRow);
+
+  renderCheckingAccounts();
+  populateContactSelects();
+}
+
+async function loadPayments() {
+  const { data, error } = await supabase.from("payments").select("*");
+  if (error) {
+    console.error("Error al cargar pagos:", error);
+    return;
+  }
+  const list = (data || []).map(paymentFromRow);
+  list.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0));
+  allPayments = list;
+
+  renderCheckingAccounts();
+  calculateFinancialReport();
+}
+
+async function loadAllErpData() {
+  await Promise.all([loadInvoices(), loadChecks(), loadContacts(), loadPayments()]);
+}
+
 function subscribeToERP() {
-  // 1. Invoices (Sales & Purchases)
-  if (invoicesUnsubscribe) invoicesUnsubscribe();
-  invoicesUnsubscribe = onSnapshot(collection(db, "invoices"), (snapshot) => {
-    const list = [];
-    snapshot.forEach(doc => list.push({ ...doc.data(), id: doc.id }));
-    list.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0));
-    allInvoices = list;
-    
-    renderSalesTable();
-    renderPurchasesTable();
-    renderCheckingAccounts();
-    calculateFinancialReport();
-    updateCheckingKPIs();
-  }, (err) => {
-    console.error("Error al cargar comprobantes:", err);
-  });
+  if (erpChannel) {
+    supabase.removeChannel(erpChannel);
+    erpChannel = null;
+  }
 
-  // 2. Checks (Cartera de cheques)
-  if (checksUnsubscribe) checksUnsubscribe();
-  checksUnsubscribe = onSnapshot(collection(db, "checks"), (snapshot) => {
-    const list = [];
-    snapshot.forEach(doc => list.push({ ...doc.data(), id: doc.id }));
-    list.sort((a, b) => new Date(b.dueDate || 0) - new Date(a.dueDate || 0));
-    allChecks = list;
+  loadAllErpData();
 
-    renderChecksTable();
-    populateCheckSelects();
-    calculateFinancialReport();
-  }, (err) => {
-    console.error("Error al cargar cartera de cheques:", err);
-  });
-
-  // 3. Contacts (Clientes y Proveedores)
-  if (contactsUnsubscribe) contactsUnsubscribe();
-  contactsUnsubscribe = onSnapshot(collection(db, "contacts"), (snapshot) => {
-    const list = [];
-    snapshot.forEach(doc => list.push({ ...doc.data(), id: doc.id }));
-    allContacts = list;
-
-    renderCheckingAccounts();
-    populateContactSelects();
-  }, (err) => {
-    console.error("Error al cargar contactos:", err);
-  });
-
-  // 4. Payments (Cobranzas y pagos imputados)
-  if (paymentsUnsubscribe) paymentsUnsubscribe();
-  paymentsUnsubscribe = onSnapshot(collection(db, "payments"), (snapshot) => {
-    const list = [];
-    snapshot.forEach(doc => list.push({ ...doc.data(), id: doc.id }));
-    list.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0));
-    allPayments = list;
-
-    renderCheckingAccounts();
-    calculateFinancialReport();
-  }, (err) => {
-    console.error("Error al cargar pagos:", err);
-  });
+  erpChannel = supabase
+    .channel("admin:erp")
+    .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => loadInvoices())
+    .on("postgres_changes", { event: "*", schema: "public", table: "checks" }, () => loadChecks())
+    .on("postgres_changes", { event: "*", schema: "public", table: "contacts" }, () => loadContacts())
+    .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, () => loadPayments())
+    .subscribe((status) => {
+      if (status === "CHANNEL_ERROR") {
+        console.error("Error en la suscripción Realtime del Mini-ERP.");
+      }
+    });
 }
 
 // =============================================================================
@@ -1393,10 +1437,14 @@ async function handleSaveSale(e) {
     }
 
     const isCtaCte = paymentTerm === "CTA_CTE";
-    const invoiceRef = doc(collection(db, "invoices"));
-    const invoiceData = {
-      id: invoiceRef.id,
-      type: "sale",
+    const checkData = paymentTerm === "CONTADO_CHEQUE" ? {
+      bank: document.getElementById("sale-check-bank").value.trim() || "No especificado",
+      number: document.getElementById("sale-check-number").value.trim() || "S/N",
+      dueDate: document.getElementById("sale-check-due").value || saleDate,
+      drawer: document.getElementById("sale-check-drawer").value.trim() || clientName
+    } : null;
+
+    const salePayload = {
       invoiceType: saleType,
       number: saleNumber,
       date: saleDate,
@@ -1416,68 +1464,24 @@ async function handleSaveSale(e) {
       percIVA: totals.percIVA,
       percTotal: totals.percTotal,
       total: totals.total,
+      checkData
+    };
+
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("rpc_save_sale", {
+      p_payload: salePayload
+    });
+    if (rpcError) throw new Error(rpcError.message || "Error al guardar comprobante en Supabase.");
+
+    const invoiceData = {
+      id: rpcResult?.invoiceId || "",
+      type: "sale",
+      ...salePayload,
       pendingBalance: isCtaCte ? totals.total : 0,
       status: isCtaCte ? "pending" : "paid",
       created_at: new Date().toISOString()
     };
 
-    // Transacción: lee el stock real del servidor, valida y descuenta de forma atómica.
-    // Evita pérdida de actualizaciones si hay dos sesiones/pestañas vendiendo a la vez.
-    const qtyByProduct = new Map();
-    items.forEach(it => {
-      if (it.productId) qtyByProduct.set(it.productId, (qtyByProduct.get(it.productId) || 0) + it.qty);
-    });
-
-    await runTransaction(db, async (tx) => {
-      const productSnaps = [];
-      for (const [productId, qty] of qtyByProduct) {
-        const ref = doc(db, "products", productId);
-        const snap = await tx.get(ref);
-        if (!snap.exists()) throw new Error("Un producto del comprobante ya no existe en el catálogo.");
-        const stock = parseInt(snap.data().stock, 10) || 0;
-        if (qty > stock) {
-          throw new Error(`Stock insuficiente de "${snap.data().name}": pedís ${qty} y hay ${stock}.`);
-        }
-        productSnaps.push({ ref, qty });
-      }
-
-      productSnaps.forEach(({ ref, qty }) => {
-        tx.update(ref, { stock: increment(-qty), updated_at: new Date().toISOString() });
-      });
-
-      if (paymentTerm === "CONTADO_CHEQUE") {
-        const checkRef = doc(collection(db, "checks"));
-        tx.set(checkRef, {
-          id: checkRef.id,
-          direction: "RECEIVED",
-          status: "IN_PORTFOLIO",
-          bank: document.getElementById("sale-check-bank").value.trim() || "No especificado",
-          number: document.getElementById("sale-check-number").value.trim() || "S/N",
-          dueDate: document.getElementById("sale-check-due").value || saleDate,
-          drawer: document.getElementById("sale-check-drawer").value.trim() || clientName,
-          clientName,
-          amount: totals.total,
-          receivedDate: saleDate,
-          created_at: new Date().toISOString()
-        });
-      }
-
-      tx.set(invoiceRef, invoiceData);
-
-      const existingContact = allContacts.find(c => c.type === "client" && normalizeName(c.name) === normalizeName(clientName));
-      if (!existingContact) {
-        const contactRef = doc(collection(db, "contacts"));
-        tx.set(contactRef, {
-          id: contactRef.id,
-          type: "client",
-          name: clientName,
-          cuit: clientCuit || "-",
-          address: clientAddress || "-",
-          ivaCondition: clientIva,
-          created_at: new Date().toISOString()
-        });
-      }
-    });
+    await Promise.all([loadCatalogFromSupabase(), loadAllErpData()]);
 
     showToast(`¡Comprobante ${saleNumber} emitido con éxito!`, "success");
     modal.close();
@@ -1746,81 +1750,34 @@ async function handleSavePurchase(e) {
       throw new Error("Elegí el cheque de cartera con el que se paga esta compra.");
     }
 
-    const invoiceRef = doc(collection(db, "invoices"));
-    let paidByCheck = 0;
+    const purchasePayload = {
+      invoiceType: type,
+      number,
+      date,
+      supplierName,
+      supplierCuit: supplierCuit || "-",
+      category,
+      paymentMethod,
+      neto21: totals.neto21,
+      iva21: totals.iva21,
+      neto105: totals.neto105,
+      iva105: totals.iva105,
+      netoTotal: totals.netoTotal,
+      ivaTotal: totals.ivaTotal,
+      percTotal: totals.perc,
+      exempt: totals.exempt,
+      total: totals.total,
+      stockProductId: stockProductId || null,
+      stockQty,
+      endorsedCheckId: paymentMethod === "CHEQUE_CARTERA" ? endorsedCheckId : null
+    };
 
-    await runTransaction(db, async (tx) => {
-      // Todas las lecturas antes de las escrituras (requisito de las transacciones).
-      let checkRef = null;
-      if (paymentMethod === "CHEQUE_CARTERA") {
-        checkRef = doc(db, "checks", endorsedCheckId);
-        const checkSnap = await tx.get(checkRef);
-        if (!checkSnap.exists() || checkSnap.data().status !== "IN_PORTFOLIO") {
-          throw new Error("El cheque elegido ya no está disponible en cartera.");
-        }
-        paidByCheck = Number(checkSnap.data().amount) || 0;
-        if (paidByCheck - totals.total > 0.009) {
-          throw new Error(`El cheque (${formatCurrency(paidByCheck)}) supera el total de la compra (${formatCurrency(totals.total)}).`);
-        }
-      }
-
-      if (checkRef) {
-        tx.update(checkRef, {
-          status: "ENDORSED",
-          endorsedTo: supplierName,
-          endorsedDate: date,
-          updated_at: new Date().toISOString()
-        });
-      }
-
-      if (stockProductId && stockQty > 0) {
-        tx.update(doc(db, "products", stockProductId), {
-          stock: increment(stockQty),
-          updated_at: new Date().toISOString()
-        });
-      }
-
-      let pendingBalance = 0;
-      if (paymentMethod === "CTA_CTE") pendingBalance = totals.total;
-      else if (paymentMethod === "CHEQUE_CARTERA") pendingBalance = round2(totals.total - paidByCheck);
-
-      tx.set(invoiceRef, {
-        id: invoiceRef.id,
-        type: "purchase",
-        invoiceType: type,
-        number,
-        date,
-        supplierName,
-        supplierCuit: supplierCuit || "-",
-        category,
-        neto21: totals.neto21,
-        iva21: totals.iva21,
-        neto105: totals.neto105,
-        iva105: totals.iva105,
-        netoTotal: totals.netoTotal,
-        ivaTotal: totals.ivaTotal,
-        percTotal: totals.perc,
-        exempt: totals.exempt,
-        total: totals.total,
-        paymentMethod,
-        pendingBalance,
-        status: pendingBalance <= 0 ? "paid" : (pendingBalance < totals.total ? "partial" : "pending"),
-        created_at: new Date().toISOString()
-      });
-
-      const existingSupplier = allContacts.find(c => c.type === "supplier" && normalizeName(c.name) === normalizeName(supplierName));
-      if (!existingSupplier) {
-        const contactRef = doc(collection(db, "contacts"));
-        tx.set(contactRef, {
-          id: contactRef.id,
-          type: "supplier",
-          name: supplierName,
-          cuit: supplierCuit || "-",
-          category,
-          created_at: new Date().toISOString()
-        });
-      }
+    const { error: rpcError } = await supabase.rpc("rpc_save_purchase", {
+      p_payload: purchasePayload
     });
+    if (rpcError) throw new Error(rpcError.message || "Error al guardar compra en Supabase.");
+
+    await Promise.all([loadCatalogFromSupabase(), loadAllErpData()]);
 
     showToast(`¡Compra / Gasto "${number}" registrado con éxito!`, "success");
     modal.close();
@@ -2318,85 +2275,30 @@ async function handleSavePayment(e) {
       throw new Error(validationErrors.join(" "));
     }
 
-    await runTransaction(db, async (tx) => {
-      // 1. Todas las lecturas previas
-      let checkRef = null;
-      if (endorsedCheckId) {
-        checkRef = doc(db, "checks", endorsedCheckId);
-        const checkSnap = await tx.get(checkRef);
-        if (!checkSnap.exists() || checkSnap.data().status !== "IN_PORTFOLIO") {
-          throw new Error("El cheque elegido ya no está disponible en cartera.");
-        }
-      }
+    const checkData = (direction === "CLIENT_COLLECTION" && method === "CHEQUE_TERCERO") ? {
+      bank: document.getElementById("payment-check-bank").value.trim() || "No informado",
+      number: document.getElementById("payment-check-number").value.trim() || "S/N",
+      dueDate: document.getElementById("payment-check-due").value || date,
+      drawer: document.getElementById("payment-check-drawer").value.trim() || contactName
+    } : null;
 
-      const invoiceSnaps = [];
-      for (const imp of imputations) {
-        const invRef = doc(db, "invoices", imp.invoiceId);
-        const snap = await tx.get(invRef);
-        if (!snap.exists()) {
-          throw new Error("Uno de los comprobantes a imputar ya no existe.");
-        }
-        const curPending = round2(snap.data().pendingBalance || 0);
-        if (imp.amount > curPending + 0.009) {
-          throw new Error(`El comprobante ${snap.data().number} solo adeuda ${formatCurrency(curPending)}. Recargá e intentá de nuevo.`);
-        }
-        invoiceSnaps.push({ snap, applied: imp.amount, curPending });
-      }
+    const paymentPayload = {
+      direction,
+      contactName,
+      date,
+      method,
+      amount: totalAmount,
+      imputations,
+      endorsedCheckId: endorsedCheckId || null,
+      checkData
+    };
 
-      // 2. Escrituras
-      for (const { snap, applied, curPending } of invoiceSnaps) {
-        const newBalance = Math.max(0, round2(curPending - applied));
-        const newStatus = newBalance <= 0.009 ? "paid" : "partial";
-        tx.update(snap.ref, {
-          pendingBalance: newBalance,
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        });
-      }
-
-      if (direction === "CLIENT_COLLECTION" && method === "CHEQUE_TERCERO") {
-        const bank = document.getElementById("payment-check-bank").value.trim();
-        const checkNum = document.getElementById("payment-check-number").value.trim();
-        const dueDate = document.getElementById("payment-check-due").value;
-        const drawer = document.getElementById("payment-check-drawer").value.trim();
-
-        const newCheckRef = doc(collection(db, "checks"));
-        tx.set(newCheckRef, {
-          id: newCheckRef.id,
-          direction: "RECEIVED",
-          status: "IN_PORTFOLIO",
-          bank: bank || "No informado",
-          number: checkNum || "S/N",
-          dueDate: dueDate || date,
-          drawer: drawer || contactName,
-          clientName: contactName,
-          amount: totalAmount,
-          receivedDate: date,
-          created_at: new Date().toISOString()
-        });
-      }
-
-      if (checkRef) {
-        tx.update(checkRef, {
-          status: "ENDORSED",
-          endorsedTo: contactName,
-          endorsedDate: date,
-          updated_at: new Date().toISOString()
-        });
-      }
-
-      const paymentRef = doc(collection(db, "payments"));
-      tx.set(paymentRef, {
-        id: paymentRef.id,
-        direction,
-        contactName,
-        date,
-        method,
-        amount: totalAmount,
-        imputations,
-        created_at: new Date().toISOString()
-      });
+    const { error: rpcError } = await supabase.rpc("rpc_save_payment", {
+      p_payload: paymentPayload
     });
+    if (rpcError) throw new Error(rpcError.message || "Error al procesar pago en Supabase.");
+
+    await loadAllErpData();
 
     showToast(`¡Cobro / Pago de ${formatCurrency(totalAmount)} imputado con éxito!`, "success");
     modal.close();
@@ -2530,11 +2432,16 @@ async function updateCheckStatus(checkId, newStatus, successMsg) {
       updated_at: new Date().toISOString()
     };
     if (newStatus === "DEPOSITED") {
-      updateData.depositedDate = localDateISO();
+      updateData.deposited_date = localDateISO();
     } else if (newStatus === "IN_PORTFOLIO") {
-      updateData.depositedDate = null;
+      updateData.deposited_date = null;
     }
-    await updateDoc(doc(db, "checks", checkId), updateData);
+    const { error } = await supabase
+      .from("checks")
+      .update(updateData)
+      .eq("id", checkId);
+    if (error) throw error;
+    await loadChecks();
     showToast(successMsg, "success");
   } catch (err) {
     console.error("Error al actualizar cheque:", err);
