@@ -11,12 +11,7 @@ Thumbs.db
 *.sln
 *.sw?
 
-# Firebase
-.firebase/
-firebase-debug.log
-*firebase-debug.log*
-
-# Node / Dependencies (if any are added later)
+# Node / Build output
 node_modules/
 dist/
 package-lock.json

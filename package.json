@@ -9,17 +9,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lgarcia28/carlitos-autopartes.git"
+    "url": "git+https://github.com/accesorios-autocentro/accesoriosautocentro-web.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/lgarcia28/carlitos-autopartes/issues"
+    "url": "https://github.com/accesorios-autocentro/accesoriosautocentro-web/issues"
   },
-  "homepage": "https://github.com/lgarcia28/carlitos-autopartes#readme",
-  "dependencies": {
-    "firebase-admin": "^13.10.0"
-  }
+  "homepage": "https://github.com/accesorios-autocentro/accesoriosautocentro-web#readme"
 }

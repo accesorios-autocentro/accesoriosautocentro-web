@@ -4,7 +4,7 @@ import { escapeHtml } from "./erp-logic.mjs?v=2";
 // --- MAIN APPLICATION LOGIC ---
 document.addEventListener("DOMContentLoaded", () => {
   // --- STATE MACHINE ---
-  let products = []; // Populated dynamically in real-time from Firestore
+  let products = []; // Populated dynamically in real-time from Supabase
   let cart = [];
   let selectedCategory = "Todos";
   let selectedBrand = "Todas";
@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
       cart = [];
     }
 
-    // 2. Subscribe to Firestore catalog updates in real-time
+    // 2. Subscribe to Supabase catalog updates in real-time
     subscribeToCatalog();
 
     // 3. Bind interactive actions

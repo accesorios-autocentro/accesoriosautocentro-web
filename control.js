@@ -18,8 +18,6 @@ import {
   nextInvoiceNumber,
   isDuplicateInvoiceNumber,
   findStockShortages,
-  distributePayment,
-  applyPayment,
   validateImputation,
   groupAccountBalances,
   computeFinancialReport,
