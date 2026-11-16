@@ -64,16 +64,30 @@ document.addEventListener("DOMContentLoaded", () => {
   function setupResponsiveLayout() {
     const filterToggle = document.getElementById("mobile-filter-toggle");
     const sidebar = document.querySelector("aside.filter-sidebar");
-    
-    if (filterToggle && sidebar && window.innerWidth <= 768) {
-      // Move sidebar to be a sibling right after the toggle button
-      filterToggle.parentNode.insertBefore(sidebar, filterToggle.nextSibling);
-    }
+    const mainContainer = document.getElementById("storefront");
+    const productsDisplay = document.querySelector("section.products-display");
+    if (!filterToggle || !sidebar || !mainContainer || !productsDisplay) return;
+
+    const mq = window.matchMedia("(max-width: 992px)");
+    const placeSidebar = (isCompact) => {
+      if (isCompact) {
+        if (sidebar.parentNode !== filterToggle.parentNode || sidebar.previousElementSibling !== filterToggle) {
+          filterToggle.parentNode.insertBefore(sidebar, filterToggle.nextSibling);
+        }
+      } else {
+        if (sidebar.parentNode !== mainContainer || sidebar.nextElementSibling !== productsDisplay) {
+          mainContainer.insertBefore(sidebar, productsDisplay);
+        }
+      }
+    };
+
+    placeSidebar(mq.matches);
+    mq.addEventListener("change", (e) => placeSidebar(e.matches));
   }
 
   function revealCatalog(shouldScroll = true) {
     const mainContainer = document.getElementById("storefront");
-    if (mainContainer && !mainContainer.classList.contains("revealed")) {
+    if (mainContainer) {
       mainContainer.classList.add("revealed");
       if (shouldScroll) {
         setTimeout(() => {
@@ -213,10 +227,23 @@ document.addEventListener("DOMContentLoaded", () => {
       renderProducts();
     });
 
-    // E. WhatsApp Checkout Action
-    checkoutBtn.addEventListener("click", () => {
-      sendOrderViaWhatsApp();
+    // E. WhatsApp Checkout Action (native link + guard when empty)
+    checkoutBtn.addEventListener("click", (e) => {
+      if (cart.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      checkoutBtn.setAttribute("href", buildWhatsAppOrderUrl(cart));
     });
+
+    // Light-dismiss cart dialog on backdrop click
+    if (cartDrawer) {
+      cartDrawer.addEventListener("click", (e) => {
+        if (e.target === cartDrawer) {
+          cartDrawer.close();
+        }
+      });
+    }
 
     // F. Clear Cart Action
     clearCartBtn.addEventListener("click", () => {
@@ -384,7 +411,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- CURRENCY FORMATTER HELPER ---
   function formatARS(value) {
-    return "$" + value.toLocaleString("es-AR", {
+    return "$" + Number(value || 0).toLocaleString("es-AR", {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     });
@@ -628,7 +655,9 @@ document.addEventListener("DOMContentLoaded", () => {
       cartSubtotalEl.textContent = "$0";
       cartGrandTotalEl.textContent = "$0";
       cartBadgeCountEl.textContent = "0";
-      checkoutBtn.disabled = true;
+      checkoutBtn.setAttribute("href", "https://wa.me/5493416055274");
+      checkoutBtn.setAttribute("aria-disabled", "true");
+      checkoutBtn.classList.add("is-disabled");
       return;
     }
 
@@ -675,30 +704,32 @@ document.addEventListener("DOMContentLoaded", () => {
     cartSubtotalEl.textContent = formatARS(subtotal);
     cartGrandTotalEl.textContent = formatARS(subtotal);
     cartBadgeCountEl.textContent = totalItems;
-    checkoutBtn.disabled = false;
+    checkoutBtn.setAttribute("href", buildWhatsAppOrderUrl(cart));
+    checkoutBtn.removeAttribute("aria-disabled");
+    checkoutBtn.classList.remove("is-disabled");
     clearCartBtn.style.display = "inline-flex";
   }
 
   // --- WHATSAPP INTEGRATION SERIALIZATION FLOW ---
-  function sendOrderViaWhatsApp() {
-    if (cart.length === 0) return;
+  function buildWhatsAppOrderUrl(cartItems) {
+    const whatsappNum = "5493416055274";
+    if (!Array.isArray(cartItems) || cartItems.length === 0) {
+      return `https://wa.me/${whatsappNum}`;
+    }
 
-    let message = "Hola Accesorios Autocentro! Me gustaría realizar el siguiente pedido:\n\n";
-    
+    let message = "Hola Accesorios Autocentro S.R.L.! Me gustaría realizar el siguiente pedido:\n\n";
+
     let subtotal = 0;
-    cart.forEach(item => {
+    cartItems.forEach((item) => {
       const itemCost = item.product.price * item.quantity;
       subtotal += itemCost;
       message += `• *${item.quantity}x* ${item.product.name} (_${formatARS(item.product.price)} c/u_)\n`;
     });
 
     message += `\n*Total del Pedido: ${formatARS(subtotal)}*\n\n`;
-    message += "¿Tienen disponibilidad para retirar por el local de *Corrientes 579*?";
+    message += "¿Tienen disponibilidad para retirar por el local de *Corrientes 579, S2000 Rosario, Santa Fe*?";
 
-    const whatsappNum = "5493416055274";
     const encodedText = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/${whatsappNum}?text=${encodedText}`;
-
-    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    return `https://wa.me/${whatsappNum}?text=${encodedText}`;
   }
 });
