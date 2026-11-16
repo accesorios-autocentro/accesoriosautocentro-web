@@ -108,20 +108,23 @@ a {
   background: var(--text-secondary);
 }
 
-/* --- VISUAL GRAPHICS (Minimalist top brand accent) --- */
+/* --- VISUAL GRAPHICS (Facade blue & yellow stripe below white topbar) --- */
 .accent-line-top {
-  block-size: 3px;
-  background: linear-gradient(90deg, var(--accent-yellow) 0%, var(--accent-yellow-dark) 55%, var(--primary-navy) 100%);
+  block-size: 5px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--accent-yellow),
+    var(--accent-yellow) 10px,
+    var(--primary-navy) 10px,
+    var(--primary-navy) 20px
+  );
   inline-size: 100%;
-  position: fixed;
-  top: 0;
-  z-index: 1001;
 }
 
 /* --- HEADER & NAVIGATION --- */
 header.app-header {
   position: sticky;
-  top: 3px; /* Below the top accent line */
+  top: 0;
   z-index: 1000;
   background-color: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
@@ -138,7 +141,6 @@ header.app-header {
   font-weight: 500;
   letter-spacing: 0.01em;
   line-height: 1.4;
-  border-block-end: 1px solid #F1F5F9;
 }
 
 .header-topbar-inner {
