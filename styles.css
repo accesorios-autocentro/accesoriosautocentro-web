@@ -1485,23 +1485,23 @@ dialog.cart-drawer[open]::backdrop {
   bottom: 24px;
   right: 24px;
   z-index: 999;
-  background-color: #15803D;
-  color: #FFFFFF;
+  background-color: #25D366;
+  color: white;
   inline-size: 56px;
   block-size: 56px;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 18px rgba(21, 128, 61, 0.4);
+  box-shadow: 0 4px 18px rgba(37, 211, 102, 0.4);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   animation: wspPulse 2s infinite;
 }
 
 .wsp-floating-btn:hover {
-  background-color: #166534;
+  background-color: #20BA56;
   transform: scale(1.1) rotate(5deg);
-  box-shadow: 0 6px 24px rgba(21, 128, 61, 0.55);
+  box-shadow: 0 6px 24px rgba(37, 211, 102, 0.6);
   animation-play-state: paused; /* Pause standard pulse on hover */
 }
 
