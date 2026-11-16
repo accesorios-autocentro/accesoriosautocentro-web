@@ -982,11 +982,11 @@ aside.filter-sidebar {
 .card-qty-control {
   inline-size: 100%;
   min-block-size: 40px;
-  padding: 3px;
+  padding: 3px 8px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: center;
+  gap: 10px;
   background-color: #F8FAFC;
   color: var(--primary-navy);
   border: 1px solid #CBD5E1;
@@ -1032,13 +1032,13 @@ aside.filter-sidebar {
 }
 
 .card-qty-center {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 0 4px;
+  padding: 0 2px;
   cursor: text;
 }
 
@@ -2130,7 +2130,8 @@ footer.app-footer {
 
   .card-qty-control {
     min-block-size: 36px;
-    padding: 3px;
+    padding: 3px 6px;
+    gap: 6px;
     border-radius: 6px;
   }
 
