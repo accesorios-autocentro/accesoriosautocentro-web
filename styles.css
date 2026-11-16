@@ -847,6 +847,45 @@ aside.filter-sidebar {
   transition: transform 0.3s ease;
 }
 
+.product-img-placeholder {
+  inline-size: 100%;
+  block-size: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 100%);
+  color: #64748B;
+  padding: 16px;
+  text-align: center;
+}
+
+.product-img-placeholder svg {
+  inline-size: 38px;
+  block-size: 38px;
+  stroke: #94A3B8;
+}
+
+.product-img-placeholder span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 0.02em;
+}
+
+.product-code-tag {
+  display: inline-block;
+  width: fit-content;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: var(--bg-surface-low);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 .product-card:hover .product-img {
   transform: scale(1.03);
 }
@@ -1076,6 +1115,33 @@ aside.filter-sidebar {
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
+}
+
+/* Pagination / Load More Button */
+.load-more-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-block-start: var(--spacing-lg);
+}
+
+.load-more-btn {
+  background-color: var(--bg-surface);
+  color: var(--primary-navy);
+  border: 1.5px solid var(--primary-navy);
+  padding: 11px 26px;
+  border-radius: var(--radius-md);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.load-more-btn:hover {
+  background-color: var(--primary-navy);
+  color: #FFFFFF;
+  transform: translateY(-1px);
 }
 
 /* --- NEW: INTERACTIVE MAP & CONTACT SECTION --- */

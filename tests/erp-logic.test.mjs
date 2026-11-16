@@ -20,7 +20,10 @@ import {
   validateImputation,
   groupAccountBalances,
   computeFinancialReport,
-  filterProducts
+  filterProducts,
+  mapRubroToStoreCategory,
+  normalizeBrandLabel,
+  normalizeCatalogImportRows
 } from "../erp-logic.mjs";
 
 test("round2: rounds to 2 decimal places and handles float quirks", () => {
@@ -449,4 +452,53 @@ test("filterProducts: searches by code, name, vehicle brand/model with accent & 
   // 6. Max results parameter
   const limited = filterProducts(sampleProducts, "", 2);
   assert.equal(limited.length, 2);
+});
+
+test("mapRubroToStoreCategory & normalizeBrandLabel: maps Rubros and cleans brands cleanly", () => {
+  assert.equal(mapRubroToStoreCategory("FAROS TRASEROS Y RETROCESO"), "Faros y Ópticas");
+  assert.equal(mapRubroToStoreCategory("ESPEJOS EXTERIORES Y BRAZOS"), "Espejos y Levantacristales");
+  assert.equal(mapRubroToStoreCategory("MANIJAS EXTERIORES y REPARACIONES"), "Manijas y Cerraduras");
+  assert.equal(mapRubroToStoreCategory("TAZAS Y TAZONES DE RUEDA"), "Tazas y Molduras");
+  assert.equal(mapRubroToStoreCategory("CUBRE ALFOMBRA HABITACULO"), "Volantes Deportivos y Accesorios");
+  assert.equal(mapRubroToStoreCategory("GRAMPAS"), "Otros Repuestos");
+
+  assert.equal(normalizeBrandLabel("UNIVERSAL"), "Universal");
+  assert.equal(normalizeBrandLabel("FORD"), "Ford");
+  assert.equal(normalizeBrandLabel("CHEVROLET-ISUZU"), "Chevrolet-Isuzu");
+});
+
+test("normalizeCatalogImportRows: parses InformedeStock2 style matrix, clamps negative stock, applies IVA, and deduplicates codes", () => {
+  const matrix = [
+    ["Accesorios Autocentro SRL"],
+    ["Informe de Stock"],
+    ["Precio de Venta Sin IVA"],
+    [],
+    ["Código", "Producto", "Stock", "Marca", "Rubro", "Precio Venta", "Proveedor"],
+    ["055BRE003", "ABRAZADERA DE ESPEJO EXT.2380", "8", "UNIVERSAL", "BRAZOS DE ESPEJOS", "3000", "FRA"],
+    ["055BRE417", "ABRAZADERA DE ESPEJO EXT.PLAST", "-1", "UNIVERSAL", "BRAZOS DE ESPEJOS", "3600", "FRA"],
+    ["100SOP005", "ABSORVEDOR PARAG.DEL.MERIVA", "-2", "CHEVROLET-ISUZU", "ALMA DE PARAGOLPE, ABSORVEDOR", "0", "MANSILLA"],
+    ["055BRE003", "ABRAZADERA DE ESPEJO ACTUALIZADA", "5", "UNIVERSAL", "BRAZOS DE ESPEJOS", "3200", "FRA"]
+  ];
+
+  const { items, stats } = normalizeCatalogImportRows(matrix, { vatMultiplier: 1.21 });
+  assert.equal(stats.totalDataRows, 4);
+  assert.equal(stats.validCount, 3);
+  assert.equal(stats.clampedStockCount, 2);
+  assert.equal(stats.zeroPriceCount, 1);
+  assert.equal(stats.duplicateCodeCount, 1);
+
+  const dup = items.find(i => i.code === "055BRE003");
+  assert.equal(dup.name, "ABRAZADERA DE ESPEJO ACTUALIZADA");
+  assert.equal(dup.price, 3872);
+  assert.equal(dup.stock, 5);
+
+  const clamped = items.find(i => i.code === "055BRE417");
+  assert.equal(clamped.stock, 0);
+  assert.equal(clamped.category, "Espejos y Levantacristales");
+
+  const bumper = items.find(i => i.code === "100SOP005");
+  assert.equal(bumper.category, "Tazas y Molduras");
+  assert.equal(bumper.brand, "Chevrolet-Isuzu");
+  assert.equal(bumper.stock, 0);
+  assert.equal(bumper.price, 0);
 });

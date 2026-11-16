@@ -17,7 +17,7 @@
   <meta property="og:locale" content="es_AR">
 
   <!-- Core Stylesheets -->
-  <link rel="stylesheet" href="styles.css?v=16">
+  <link rel="stylesheet" href="styles.css?v=17">
 </head>
 <body>
 
@@ -190,6 +190,12 @@
               <span class="category-count" id="count-Tazas-Molduras">0</span>
             </button>
           </li>
+          <li>
+            <button class="category-btn" data-category="Otros Repuestos">
+              <span>Otros Repuestos</span>
+              <span class="category-count" id="count-Otros-Repuestos">0</span>
+            </button>
+          </li>
         </ul>
       </nav>
 
@@ -257,6 +263,13 @@
       <!-- Grid -->
       <div class="product-grid" id="product-grid">
         <!-- Rendered dynamically by app.js -->
+      </div>
+
+      <!-- Pagination / Load More -->
+      <div class="load-more-wrapper" id="load-more-wrapper" style="display: none;">
+        <button type="button" class="load-more-btn" id="load-more-btn">
+          Cargar más productos
+        </button>
       </div>
     </section>
 
@@ -461,7 +474,7 @@
   </footer>
 
   <!-- Scripts Connection -->
-  <script type="module" src="app.js?v=5"></script>
+  <script type="module" src="app.js?v=6"></script>
 
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>

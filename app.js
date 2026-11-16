@@ -1,19 +1,26 @@
-import { supabase, productFromRow } from "./supabase-client.js?v=1";
-import { escapeHtml } from "./erp-logic.mjs?v=2";
+import { supabase, fetchAllProducts } from "./supabase-client.js?v=2";
+import { escapeHtml, normalizeName } from "./erp-logic.mjs?v=3";
 
 // --- MAIN APPLICATION LOGIC ---
 document.addEventListener("DOMContentLoaded", () => {
   // --- STATE MACHINE ---
-  let products = []; // Populated dynamically in real-time from Supabase
+  const STOREFRONT_PAGE_SIZE = 24;
+  let products = []; // Populated dynamically from Supabase (paginated past 1,000 limit)
+  let filteredProducts = [];
+  let visibleCount = STOREFRONT_PAGE_SIZE;
   let cart = [];
   let selectedCategory = "Todos";
   let selectedBrand = "Todas";
   let selectedModel = "Todos";
   let selectedYear = "Todos";
   let searchQuery = "";
+  let realtimeTimer = null;
+  let searchDebounceTimer = null;
 
   // --- HTML ELEMENTS DOM REFERENCE ---
   const productGrid = document.getElementById("product-grid");
+  const loadMoreWrapper = document.getElementById("load-more-wrapper");
+  const loadMoreBtn = document.getElementById("load-more-btn");
   const currentCategoryTitle = document.getElementById("current-category-title");
   const resultsCount = document.getElementById("results-count");
   const searchInput = document.getElementById("search-input");
@@ -99,21 +106,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- LOAD CATALOG & SUBSCRIBE TO REALTIME SUPABASE UPDATES ---
   async function loadCatalogFromSupabase() {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .order("updated_at", { ascending: false });
-
-    if (error) {
+    try {
+      products = await fetchAllProducts({ client: supabase });
+    } catch (error) {
       console.error("Error al cargar catálogo de Supabase:", error);
       return;
     }
 
-    products = (data || []).map(productFromRow);
     populateBrandFilter();
     updateCategoryCounts();
     renderProducts();
     renderCart();
+  }
+
+  function scheduleCatalogRefresh() {
+    clearTimeout(realtimeTimer);
+    realtimeTimer = setTimeout(() => {
+      loadCatalogFromSupabase();
+    }, 2000);
   }
 
   function subscribeToCatalog() {
@@ -125,7 +135,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "postgres_changes",
         { event: "*", schema: "public", table: "products" },
         () => {
-          loadCatalogFromSupabase();
+          scheduleCatalogRefresh();
         }
       )
       .subscribe((status) => {
@@ -196,14 +206,24 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
-    // C. Instant Keyboard Search
+    // C. Debounced Keyword & SKU Search (accent-insensitive across 8k+ items)
     searchInput.addEventListener("input", (e) => {
-      searchQuery = e.target.value.trim().toLowerCase();
-      if (searchQuery.length > 0) {
-        revealCatalog(false); // Reveal silently without disturbing scroll focus
-      }
-      renderProducts();
+      const val = normalizeName(e.target.value || "").trim();
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        searchQuery = val;
+        if (searchQuery.length > 0) {
+          revealCatalog(false); // Reveal silently without disturbing scroll focus
+        }
+        renderProducts();
+      }, 150);
     });
+
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener("click", () => {
+        appendProductBatch();
+      });
+    }
 
     const searchForm = document.getElementById("search-form");
     if (searchForm) {
@@ -431,20 +451,108 @@ document.addEventListener("DOMContentLoaded", () => {
       "Espejos y Levantacristales": "count-Espejos-Cristales",
       "Manijas y Cerraduras": "count-Manijas-Cerraduras",
       "Volantes Deportivos y Accesorios": "count-Volantes-Accesorios",
-      "Tazas y Molduras": "count-Tazas-Molduras"
+      "Tazas y Molduras": "count-Tazas-Molduras",
+      "Otros Repuestos": "count-Otros-Repuestos"
     };
 
     Object.entries(badgeMap).forEach(([catKey, elId]) => {
       const el = document.getElementById(elId);
       if (el) {
-        el.textContent = counts[catKey] || 0;
+        el.textContent = (counts[catKey] || 0).toLocaleString("es-AR");
       }
     });
   }
 
-  // --- RENDER PRODUCTS GRID (Combined Hierarchical Cascading Filtering) ---
+  function buildImagePlaceholderMarkup(category) {
+    return `
+      <div class="product-img-placeholder" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+        </svg>
+        <span>${escapeHtml(category || "Repuesto Automotor")}</span>
+      </div>
+    `;
+  }
+
+  function createProductCard(p, index) {
+    const card = document.createElement("article");
+    card.className = "product-card";
+    card.style.animationDelay = `${Math.min(index, 11) * 0.03}s`;
+
+    const hasImageUrl = Boolean(p.image_url && p.image_url.trim());
+    const mediaHtml = hasImageUrl
+      ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" class="product-img" loading="lazy">`
+      : buildImagePlaceholderMarkup(p.category);
+    const codeHtml = p.code
+      ? `<span class="product-code-tag">Cód. ${escapeHtml(p.code)}</span>`
+      : "";
+
+    card.innerHTML = `
+      <div class="product-img-wrapper">
+        <span class="category-tag">${escapeHtml(p.category)}</span>
+        ${mediaHtml}
+      </div>
+      <div class="product-info">
+        ${codeHtml}
+        <h4 class="product-title">${escapeHtml(p.name)}</h4>
+        <p class="product-description">${escapeHtml(p.description)}</p>
+      </div>
+      <div class="product-footer">
+        <div class="price-stock-wrapper">
+          <span class="product-price">${formatARS(p.price)}</span>
+        </div>
+        <div class="card-cart-slot" data-product-id="${escapeHtml(p.id)}"></div>
+      </div>
+    `;
+
+    const imgEl = card.querySelector("img.product-img");
+    if (imgEl) {
+      imgEl.addEventListener("error", () => {
+        imgEl.outerHTML = buildImagePlaceholderMarkup(p.category);
+      }, { once: true });
+    }
+
+    renderCardCartSlot(card.querySelector(".card-cart-slot"), p);
+    return card;
+  }
+
+  function updateStorefrontPaginationUI() {
+    const total = filteredProducts.length;
+    const shown = Math.min(visibleCount, total);
+    resultsCount.textContent =
+      total === 0
+        ? "Mostrando 0 productos"
+        : `Mostrando ${shown.toLocaleString("es-AR")} de ${total.toLocaleString("es-AR")} ${total === 1 ? "producto" : "productos"}`;
+
+    if (loadMoreWrapper && loadMoreBtn) {
+      const remaining = total - shown;
+      if (remaining > 0) {
+        loadMoreWrapper.style.display = "flex";
+        const nextBatch = Math.min(STOREFRONT_PAGE_SIZE, remaining);
+        loadMoreBtn.textContent = `Cargar ${nextBatch} más (${remaining.toLocaleString("es-AR")} restantes)`;
+      } else {
+        loadMoreWrapper.style.display = "none";
+      }
+    }
+  }
+
+  function appendProductBatch() {
+    if (!productGrid) return;
+    const prevEnd = Math.min(visibleCount, filteredProducts.length);
+    visibleCount += STOREFRONT_PAGE_SIZE;
+    const nextEnd = Math.min(visibleCount, filteredProducts.length);
+    const fragment = document.createDocumentFragment();
+    for (let i = prevEnd; i < nextEnd; i++) {
+      fragment.appendChild(createProductCard(filteredProducts[i], i - prevEnd));
+    }
+    productGrid.appendChild(fragment);
+    updateStorefrontPaginationUI();
+  }
+
+  // --- RENDER PRODUCTS GRID (Combined Hierarchical Cascading Filtering + Pagination) ---
   function renderProducts() {
     productGrid.innerHTML = "";
+    visibleCount = STOREFRONT_PAGE_SIZE;
 
     // Toggle reset filters button visibility
     const hasActiveFilters = selectedBrand !== "Todas" || selectedModel !== "Todos" || selectedYear !== "Todos";
@@ -452,34 +560,34 @@ document.addEventListener("DOMContentLoaded", () => {
       resetFiltersBtn.style.display = hasActiveFilters ? "inline-flex" : "none";
     }
 
-    // Apply combined filters: Category + Keyword Search + Brand + Model + Year compatibility
-    const filtered = products.filter(p => {
-      // 1. Category Filter Match
+    const searchTerms = searchQuery ? searchQuery.split(/\s+/).filter(Boolean) : [];
+
+    // Apply combined filters: Category + Keyword/Code Search + Brand + Model + Year compatibility
+    filteredProducts = products.filter(p => {
       const matchesCategory = selectedCategory === "Todos" || p.category === selectedCategory;
-      
-      // 2. Hierarchical vehicle compatibility match (Universal parts always visible)
+      if (!matchesCategory) return false;
+
       const matchesBrand = selectedBrand === "Todas" || p.brand === selectedBrand || p.brand === "Universal";
-      
+      if (!matchesBrand) return false;
+
       const matchesModel = selectedModel === "Todos" || p.model === selectedModel || p.model === "Todos" || p.brand === "Universal";
-      
-      const matchesYear = selectedYear === "Todos" || 
-                          (selectedYear >= p.year_start && selectedYear <= p.year_end) || 
-                          p.brand === "Universal";
-      
-      // 3. Keyword Search Match
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery) ||
-                            p.description.toLowerCase().includes(searchQuery) ||
-                            p.category.toLowerCase().includes(searchQuery) ||
-                            p.brand.toLowerCase().includes(searchQuery) ||
-                            p.model.toLowerCase().includes(searchQuery);
-                            
-      return matchesCategory && matchesBrand && matchesModel && matchesYear && matchesSearch;
+      if (!matchesModel) return false;
+
+      const matchesYear = selectedYear === "Todos" ||
+        (selectedYear >= p.year_start && selectedYear <= p.year_end) ||
+        p.brand === "Universal";
+      if (!matchesYear) return false;
+
+      if (searchTerms.length === 0) return true;
+
+      const searchable = normalizeName(
+        `${p.code || ""} ${p.name || ""} ${p.description || ""} ${p.category || ""} ${p.brand || ""} ${p.model || ""}`
+      );
+      return searchTerms.every(term => searchable.includes(term));
     });
 
-    // Update display counter label
-    resultsCount.textContent = `Mostrando ${filtered.length} ${filtered.length === 1 ? "producto" : "productos"}`;
-
-    if (filtered.length === 0) {
+    if (filteredProducts.length === 0) {
+      updateStorefrontPaginationUI();
       productGrid.innerHTML = `
         <div class="cart-empty-state" style="grid-column: 1 / -1; padding: var(--spacing-xl) var(--spacing-md);">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="inline-size: 56px; block-size: 56px; margin-block-end: 16px;">
@@ -492,30 +600,13 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    filtered.forEach((p, index) => {
-      const card = document.createElement("article");
-      card.className = "product-card";
-      card.style.animationDelay = `${index * 0.04}s`;
-      card.innerHTML = `
-        <div class="product-img-wrapper">
-          <span class="category-tag">${escapeHtml(p.category)}</span>
-          <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" class="product-img" loading="lazy">
-        </div>
-        <div class="product-info">
-          <h4 class="product-title">${escapeHtml(p.name)}</h4>
-          <p class="product-description">${escapeHtml(p.description)}</p>
-        </div>
-        <div class="product-footer">
-          <div class="price-stock-wrapper">
-            <span class="product-price">${formatARS(p.price)}</span>
-          </div>
-          <div class="card-cart-slot" data-product-id="${escapeHtml(p.id)}"></div>
-        </div>
-      `;
-
-      renderCardCartSlot(card.querySelector(".card-cart-slot"), p);
-      productGrid.appendChild(card);
-    });
+    const fragment = document.createDocumentFragment();
+    const initialLimit = Math.min(visibleCount, filteredProducts.length);
+    for (let i = 0; i < initialLimit; i++) {
+      fragment.appendChild(createProductCard(filteredProducts[i], i));
+    }
+    productGrid.appendChild(fragment);
+    updateStorefrontPaginationUI();
   }
 
   function renderCardCartSlot(slot, product) {

@@ -1,11 +1,12 @@
 import {
   supabase,
+  fetchAllProducts,
   productFromRow,
   invoiceFromRow,
   checkFromRow,
   contactFromRow,
   paymentFromRow
-} from "./supabase-client.js?v=1";
+} from "./supabase-client.js?v=2";
 import {
   round2,
   escapeHtml,
@@ -21,8 +22,9 @@ import {
   validateImputation,
   groupAccountBalances,
   computeFinancialReport,
-  filterProducts
-} from "./erp-logic.mjs?v=2";
+  filterProducts,
+  normalizeCatalogImportRows
+} from "./erp-logic.mjs?v=3";
 
 // --- DYNAMIC SECURITY ALLOWLIST (Emails autorizados) ---
 const CORREOS_AUTORIZADOS = [
@@ -77,8 +79,14 @@ const adminCategoryFilter = document.getElementById("admin-category-filter");
 const adminResetFilters = document.getElementById("admin-reset-filters");
 
 // --- INITIAL STATES & SETUP ---
+const ADMIN_PAGE_SIZE = 50;
 let imgbbApiKey = localStorage.getItem("autocentro_imgbb_key") || "3e8f85f1c4e77248e3e44ebf996d99df";
 let allProducts = [];
+let adminFilteredProducts = [];
+let adminCurrentPage = 1;
+let adminSearchTimer = null;
+let catalogRealtimeTimer = null;
+let isBulkImportingProducts = false;
 let catalogChannel = null;
 let erpChannel = null;
 let activeUserEmail = null;
@@ -396,17 +404,27 @@ async function deleteProduct(id, name) {
 
 // --- INLINE FAST UPDATES FOR PRICES AND STOCK ---
 async function saveInlineUpdate(id, price, stock, name) {
+  const nextPrice = Math.max(0, parseFloat(price) || 0);
+  const nextStock = Math.max(0, parseInt(stock, 10) || 0);
+  const updatedAt = new Date().toISOString();
+
   try {
     const { error } = await supabase
       .from("products")
       .update({
-        price: parseFloat(price),
-        stock: parseInt(stock, 10),
-        updated_at: new Date().toISOString()
+        price: nextPrice,
+        stock: nextStock,
+        updated_at: updatedAt
       })
       .eq("id", id);
     if (error) throw error;
-    await loadCatalogFromSupabase();
+
+    const existing = allProducts.find(p => p.id === id);
+    if (existing) {
+      existing.price = nextPrice;
+      existing.stock = nextStock;
+      existing.updated_at = updatedAt;
+    }
     showToast(`Valores rápidos de "${name}" actualizados.`, "success");
   } catch (err) {
     console.error("Error en actualización rápida:", err);
@@ -416,27 +434,36 @@ async function saveInlineUpdate(id, price, stock, name) {
 
 // --- LOAD & SUBSCRIBE TO LIVE SUPABASE DATABASE ---
 async function loadCatalogFromSupabase() {
-  const { data, error } = await supabase
-    .from("products")
-    .select("*")
-    .order("updated_at", { ascending: false });
-
-  if (error) {
+  let prods = [];
+  try {
+    prods = await fetchAllProducts({ client: supabase });
+  } catch (error) {
     console.error("Error en carga de productos desde Supabase:", error);
     showToast("Error cargando base de datos. Comprobá conexión.", "error");
     return;
   }
 
-  const prods = (data || []).map(productFromRow);
   if (prods.length === 0) {
     allProducts = [];
+    adminFilteredProducts = [];
+    adminCurrentPage = 1;
     adminResultsCount.textContent = "Base de datos vacía (0 productos)";
+    const pagBar = document.getElementById("admin-pagination-bar");
+    if (pagBar) pagBar.style.display = "none";
     renderSeedMigrationOffer();
     return;
   }
 
   allProducts = prods;
-  applyAdminFilters();
+  applyAdminFilters(false);
+}
+
+function scheduleAdminCatalogRefresh() {
+  if (isBulkImportingProducts) return;
+  clearTimeout(catalogRealtimeTimer);
+  catalogRealtimeTimer = setTimeout(() => {
+    loadCatalogFromSupabase();
+  }, 2000);
 }
 
 function subscribeToCatalog() {
@@ -453,7 +480,7 @@ function subscribeToCatalog() {
       "postgres_changes",
       { event: "*", schema: "public", table: "products" },
       () => {
-        loadCatalogFromSupabase();
+        scheduleAdminCatalogRefresh();
       }
     )
     .subscribe((status) => {
@@ -464,47 +491,102 @@ function subscribeToCatalog() {
 }
 
 // --- APPLY LIVE FILTERS FOR ADMIN CATALOG ---
-function applyAdminFilters() {
-  const query = adminSearchFilter.value.toLowerCase().trim();
+function applyAdminFilters(resetPage = true) {
+  if (resetPage) adminCurrentPage = 1;
+
+  const query = normalizeName(adminSearchFilter.value || "").trim();
   const category = adminCategoryFilter.value;
+  const terms = query ? query.split(/\s+/).filter(Boolean) : [];
 
-  const filtered = allProducts.filter(prod => {
-    const matchesSearch = !query || 
-      (prod.name && prod.name.toLowerCase().includes(query)) ||
-      (prod.code && prod.code.toLowerCase().includes(query)) ||
-      (prod.brand && prod.brand.toLowerCase().includes(query)) ||
-      (prod.model && prod.model.toLowerCase().includes(query)) ||
-      (prod.description && prod.description.toLowerCase().includes(query));
+  adminFilteredProducts = allProducts.filter(prod => {
+    if (category !== "ALL" && prod.category !== category) return false;
+    if (terms.length === 0) return true;
 
-    const matchesCategory = category === "ALL" || prod.category === category;
-
-    return matchesSearch && matchesCategory;
+    const searchable = normalizeName(
+      `${prod.code || ""} ${prod.name || ""} ${prod.brand || ""} ${prod.model || ""} ${prod.description || ""}`
+    );
+    return terms.every(term => searchable.includes(term));
   });
 
-  adminResultsCount.textContent = `${filtered.length} de ${allProducts.length} ${allProducts.length === 1 ? "repuesto" : "repuestos"}`;
-  renderAdminProducts(filtered);
+  const totalPages = Math.max(1, Math.ceil(adminFilteredProducts.length / ADMIN_PAGE_SIZE));
+  if (adminCurrentPage > totalPages) adminCurrentPage = totalPages;
+
+  adminResultsCount.textContent = `${adminFilteredProducts.length.toLocaleString("es-AR")} de ${allProducts.length.toLocaleString("es-AR")} ${allProducts.length === 1 ? "repuesto" : "repuestos"}`;
+  renderAdminProducts(adminFilteredProducts);
 }
 
 // --- EVENT LISTENERS FOR ADVANCED FILTERS ---
-adminSearchFilter.addEventListener("input", applyAdminFilters);
-adminCategoryFilter.addEventListener("change", applyAdminFilters);
+adminSearchFilter.addEventListener("input", () => {
+  clearTimeout(adminSearchTimer);
+  adminSearchTimer = setTimeout(() => applyAdminFilters(true), 150);
+});
+adminCategoryFilter.addEventListener("change", () => applyAdminFilters(true));
 adminResetFilters.addEventListener("click", () => {
   adminSearchFilter.value = "";
   adminCategoryFilter.value = "ALL";
-  applyAdminFilters();
+  applyAdminFilters(true);
   showToast("Filtros limpiados.", "info");
 });
 
-// --- RENDER PRODUCTS GRID FOR ADMIN ---
+const adminPrevPageBtn = document.getElementById("admin-prev-page");
+const adminNextPageBtn = document.getElementById("admin-next-page");
+if (adminPrevPageBtn) {
+  adminPrevPageBtn.addEventListener("click", () => {
+    if (adminCurrentPage > 1) {
+      adminCurrentPage -= 1;
+      renderAdminProducts(adminFilteredProducts);
+      adminProductsList.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+}
+if (adminNextPageBtn) {
+  adminNextPageBtn.addEventListener("click", () => {
+    const totalPages = Math.max(1, Math.ceil(adminFilteredProducts.length / ADMIN_PAGE_SIZE));
+    if (adminCurrentPage < totalPages) {
+      adminCurrentPage += 1;
+      renderAdminProducts(adminFilteredProducts);
+      adminProductsList.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+}
+
+function buildAdminPlaceholderMarkup() {
+  return `<div class="manage-item-img" style="display:flex;align-items:center;justify-content:center;background:#F1F5F9;color:#94A3B8;font-size:0.7rem;font-weight:700;">SIN FOTO</div>`;
+}
+
+// --- RENDER PRODUCTS GRID FOR ADMIN (PAGINATED) ---
 function renderAdminProducts(productsArray) {
   adminProductsList.innerHTML = "";
 
-  productsArray.forEach(prod => {
+  const totalItems = productsArray.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / ADMIN_PAGE_SIZE));
+  const startIdx = (adminCurrentPage - 1) * ADMIN_PAGE_SIZE;
+  const pageItems = productsArray.slice(startIdx, startIdx + ADMIN_PAGE_SIZE);
+
+  const pagBar = document.getElementById("admin-pagination-bar");
+  const pageInfo = document.getElementById("admin-page-info");
+  if (pagBar && pageInfo) {
+    if (totalItems > ADMIN_PAGE_SIZE) {
+      pagBar.style.display = "flex";
+      pageInfo.textContent = `Página ${adminCurrentPage} de ${totalPages} (mostrando ${startIdx + 1}–${startIdx + pageItems.length} de ${totalItems.toLocaleString("es-AR")})`;
+      if (adminPrevPageBtn) adminPrevPageBtn.disabled = adminCurrentPage <= 1;
+      if (adminNextPageBtn) adminNextPageBtn.disabled = adminCurrentPage >= totalPages;
+    } else {
+      pagBar.style.display = "none";
+    }
+  }
+
+  const fragment = document.createDocumentFragment();
+  pageItems.forEach(prod => {
     const card = document.createElement("div");
     card.className = "manage-item-card";
     const codeTag = prod.code ? `<span class="product-code-tag">${escapeHtml(prod.code)}</span> ` : "";
+    const mediaHtml = prod.image_url && prod.image_url.trim()
+      ? `<img src="${escapeHtml(prod.image_url)}" alt="${escapeHtml(prod.name)}" class="manage-item-img" loading="lazy">`
+      : buildAdminPlaceholderMarkup();
+
     card.innerHTML = `
-      <img src="${escapeHtml(prod.image_url)}" alt="${escapeHtml(prod.name)}" class="manage-item-img">
+      ${mediaHtml}
       <div class="manage-item-info">
         <span class="manage-item-title">${codeTag}${escapeHtml(prod.name)}</span>
         <span class="manage-item-meta">${escapeHtml(prod.category)} | ${escapeHtml(prod.brand)} ${escapeHtml(prod.model)} (${escapeHtml(prod.year_start)}-${escapeHtml(prod.year_end)})</span>
@@ -527,6 +609,13 @@ function renderAdminProducts(productsArray) {
       </div>
     `;
 
+    const imgEl = card.querySelector("img.manage-item-img");
+    if (imgEl) {
+      imgEl.addEventListener("error", () => {
+        imgEl.outerHTML = buildAdminPlaceholderMarkup();
+      }, { once: true });
+    }
+
     // Fast inline edits
     const priceInput = card.querySelector(".inline-price");
     const stockInput = card.querySelector(".inline-stock");
@@ -547,8 +636,9 @@ function renderAdminProducts(productsArray) {
       editProduct(prod);
     });
 
-    adminProductsList.appendChild(card);
+    fragment.appendChild(card);
   });
+  adminProductsList.appendChild(fragment);
 }
 
 // --- AUTOMATIC SEED MIGRATION (Populate 15 products if empty) ---
@@ -1657,23 +1747,45 @@ function initPurchasesModule() {
   }
 }
 
+function populatePurchaseStockSelect(query = "") {
+  const stockProdSelect = document.getElementById("purchase-stock-product");
+  if (!stockProdSelect) return;
+
+  const previous = stockProdSelect.value;
+  stockProdSelect.innerHTML = `<option value="">-- Ninguno (No modificar stock) --</option>`;
+  const matches = filterProducts(allProducts, query, 50);
+  const fragment = document.createDocumentFragment();
+  matches.forEach(prod => {
+    const opt = document.createElement("option");
+    opt.value = prod.id;
+    const codeTag = prod.code ? `[${prod.code}] ` : "";
+    opt.textContent = `${codeTag}${prod.name} (Stock actual: ${prod.stock})`;
+    fragment.appendChild(opt);
+  });
+  stockProdSelect.appendChild(fragment);
+  if (previous && matches.some(p => p.id === previous)) {
+    stockProdSelect.value = previous;
+  }
+}
+
+const purchaseStockSearchInput = document.getElementById("purchase-stock-search");
+if (purchaseStockSearchInput) {
+  purchaseStockSearchInput.addEventListener("input", (e) => {
+    populatePurchaseStockSelect(e.target.value);
+  });
+}
+
 function openPurchaseModal() {
   const modal = document.getElementById("purchase-modal");
   const form = document.getElementById("purchase-form");
   const dateInput = document.getElementById("purchase-date");
-  const stockProdSelect = document.getElementById("purchase-stock-product");
   const checkContainer = document.getElementById("purchase-check-container");
 
   form.reset();
   checkContainer.style.display = "none";
   dateInput.value = localDateISO();
-
-  // Populate stock replenishment dropdown
-  stockProdSelect.innerHTML = `<option value="">-- Ninguno (No modificar stock) --</option>`;
-  allProducts.forEach(prod => {
-    const codeTag = prod.code ? `[${escapeHtml(prod.code)}] ` : "";
-    stockProdSelect.innerHTML += `<option value="${escapeHtml(prod.id)}">${codeTag}${escapeHtml(prod.name)} (Stock actual: ${escapeHtml(prod.stock)})</option>`;
-  });
+  if (purchaseStockSearchInput) purchaseStockSearchInput.value = "";
+  populatePurchaseStockSelect("");
 
   recalculatePurchaseTotal();
   modal.showModal();
@@ -2734,3 +2846,187 @@ function openPrintVoucher(inv) {
 
   modal.showModal();
 }
+
+// --- BULK EXCEL / CSV CATALOG IMPORTER ---
+(function setupExcelImporter() {
+  const modal = document.getElementById("import-excel-modal");
+  const openBtn = document.getElementById("open-import-modal-btn");
+  const closeBtn = document.getElementById("close-import-modal-x");
+  const fileInput = document.getElementById("excel-file-input");
+  const addIvaCheck = document.getElementById("excel-add-iva-check");
+  const previewBox = document.getElementById("excel-preview-box");
+  const progressBox = document.getElementById("excel-progress-box");
+  const progressLabel = document.getElementById("excel-progress-label");
+  const progressPct = document.getElementById("excel-progress-pct");
+  const progressFill = document.getElementById("excel-progress-fill");
+  const startBtn = document.getElementById("start-excel-import-btn");
+
+  if (!modal || !openBtn || !fileInput || !startBtn) return;
+
+  let rawSheetMatrix = null;
+  let parsedResult = null;
+
+  function renderImportPreview() {
+    if (!rawSheetMatrix) {
+      previewBox.style.display = "none";
+      startBtn.disabled = true;
+      parsedResult = null;
+      return;
+    }
+
+    const vatMultiplier = addIvaCheck.checked ? 1.21 : 1;
+    parsedResult = normalizeCatalogImportRows(rawSheetMatrix, { vatMultiplier });
+
+    if (parsedResult.items.length === 0) {
+      previewBox.style.display = "block";
+      previewBox.innerHTML = `<strong style="color:#DC2626;">No se detectaron columnas válidas.</strong> Verificá que la planilla incluya columnas como <em>Código</em> y <em>Producto</em>.`;
+      startBtn.disabled = true;
+      return;
+    }
+
+    const existingByCode = new Map();
+    allProducts.forEach(p => {
+      if (p.code) existingByCode.set(p.code.trim().toLowerCase(), p.id);
+    });
+    let updateCount = 0;
+    let insertCount = 0;
+    parsedResult.items.forEach(item => {
+      if (item.code && existingByCode.has(item.code.toLowerCase())) updateCount++;
+      else insertCount++;
+    });
+
+    const sample = parsedResult.items[0];
+    previewBox.style.display = "block";
+    previewBox.innerHTML = `
+      <div><strong>${parsedResult.items.length.toLocaleString("es-AR")} artículos listos para importar</strong></div>
+      <div>• Nuevos a crear: <strong>${insertCount.toLocaleString("es-AR")}</strong> | Existentes a actualizar (por código): <strong>${updateCount.toLocaleString("es-AR")}</strong></div>
+      <div>• Stocks negativos ajustados a 0: <strong>${parsedResult.stats.clampedStockCount.toLocaleString("es-AR")}</strong> | Con precio $0: <strong>${parsedResult.stats.zeroPriceCount.toLocaleString("es-AR")}</strong></div>
+      <div style="margin-top:4px;color:var(--text-secondary);">Ejemplo 1° fila: <strong>${escapeHtml(sample.code || "S/C")}</strong> — ${escapeHtml(sample.name)} (${escapeHtml(sample.category)}) · $${Number(sample.price).toLocaleString("es-AR")} · Stk ${sample.stock}</div>
+    `;
+    startBtn.disabled = false;
+  }
+
+  openBtn.addEventListener("click", () => {
+    fileInput.value = "";
+    rawSheetMatrix = null;
+    parsedResult = null;
+    previewBox.style.display = "none";
+    progressBox.style.display = "none";
+    progressFill.style.width = "0%";
+    startBtn.disabled = true;
+    modal.showModal();
+  });
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      if (!isBulkImportingProducts) modal.close();
+    });
+  }
+
+  addIvaCheck.addEventListener("change", renderImportPreview);
+
+  fileInput.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    previewBox.style.display = "block";
+    previewBox.innerHTML = "Leyendo planilla Excel...";
+    startBtn.disabled = true;
+
+    try {
+      const XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      rawSheetMatrix = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
+      renderImportPreview();
+    } catch (err) {
+      console.error("Error leyendo archivo Excel:", err);
+      previewBox.innerHTML = `<strong style="color:#DC2626;">Error al leer el archivo:</strong> ${escapeHtml(err.message || "formato inválido")}`;
+      rawSheetMatrix = null;
+      parsedResult = null;
+    }
+  });
+
+  startBtn.addEventListener("click", async () => {
+    if (!parsedResult || parsedResult.items.length === 0 || isBulkImportingProducts) return;
+
+    isBulkImportingProducts = true;
+    startBtn.disabled = true;
+    fileInput.disabled = true;
+    addIvaCheck.disabled = true;
+    progressBox.style.display = "block";
+
+    try {
+      const latestCatalog = await fetchAllProducts({
+        client: supabase,
+        columns: "id,code,image_url,model,year_start,year_end"
+      });
+      const existingByCode = new Map();
+      latestCatalog.forEach(p => {
+        if (p.code) existingByCode.set(p.code.trim().toLowerCase(), p);
+      });
+
+      const nowIso = new Date().toISOString();
+      const toInsert = [];
+      const toUpdate = [];
+
+      parsedResult.items.forEach(item => {
+        const existingProd = item.code ? existingByCode.get(item.code.toLowerCase()) : null;
+        if (existingProd) {
+          toUpdate.push({
+            id: existingProd.id,
+            ...item,
+            image_url: item.image_url || existingProd.image_url || "",
+            model: existingProd.model || item.model,
+            year_start: existingProd.year_start ?? item.year_start,
+            year_end: existingProd.year_end ?? item.year_end,
+            updated_at: nowIso
+          });
+        } else {
+          toInsert.push({ ...item, updated_at: nowIso });
+        }
+      });
+
+      const CHUNK_SIZE = 400;
+      const totalItems = toInsert.length + toUpdate.length;
+      let processed = 0;
+
+      const updateProgress = (label) => {
+        const pct = Math.min(100, Math.round((processed / Math.max(1, totalItems)) * 100));
+        progressLabel.textContent = label;
+        progressPct.textContent = `${pct}%`;
+        progressFill.style.width = `${pct}%`;
+      };
+
+      for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
+        const chunk = toInsert.slice(i, i + CHUNK_SIZE);
+        updateProgress(`Creando nuevos artículos (${processed.toLocaleString("es-AR")} / ${totalItems.toLocaleString("es-AR")})...`);
+        const { error } = await supabase.from("products").insert(chunk);
+        if (error) throw error;
+        processed += chunk.length;
+      }
+
+      for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
+        const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
+        updateProgress(`Actualizando existentes (${processed.toLocaleString("es-AR")} / ${totalItems.toLocaleString("es-AR")})...`);
+        const { error } = await supabase.from("products").upsert(chunk, { onConflict: "id" });
+        if (error) throw error;
+        processed += chunk.length;
+      }
+
+      updateProgress("Importación completada");
+      await loadCatalogFromSupabase();
+      showToast(`¡Catálogo actualizado! ${toInsert.length} creados y ${toUpdate.length} actualizados.`, "success");
+      modal.close();
+    } catch (err) {
+      console.error("Error importando catálogo masivo:", err);
+      showToast(`Error en importación masiva: ${err.message || "revisá la consola"}`, "error");
+    } finally {
+      isBulkImportingProducts = false;
+      fileInput.disabled = false;
+      addIvaCheck.disabled = false;
+      startBtn.disabled = false;
+    }
+  });
+})();

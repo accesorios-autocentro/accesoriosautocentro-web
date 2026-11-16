@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS public.products (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS idx_products_updated_at ON public.products (updated_at DESC, id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON public.products (category);
+CREATE INDEX IF NOT EXISTS idx_products_brand ON public.products (brand);
+CREATE INDEX IF NOT EXISTS idx_products_code ON public.products (code);
+
 -- Comprobantes (Ventas y Compras)
 CREATE TABLE IF NOT EXISTS public.invoices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -120,6 +125,11 @@ CREATE TABLE IF NOT EXISTS public.checks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_products_updated_at ON public.products (updated_at DESC, id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON public.products (category);
+CREATE INDEX IF NOT EXISTS idx_products_brand ON public.products (brand);
+CREATE INDEX IF NOT EXISTS idx_products_code ON public.products (code);
 
 CREATE INDEX IF NOT EXISTS idx_checks_status_due ON public.checks (status, due_date DESC);
 

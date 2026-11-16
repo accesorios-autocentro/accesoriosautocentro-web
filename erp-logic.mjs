@@ -381,3 +381,187 @@ export function filterProducts(products, query, maxResults = 25) {
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, maxResults).map(x => x.product);
 }
+
+const RUBRO_CATEGORY_RULES = [
+  {
+    category: "Faros y Ópticas",
+    keywords: ["faro", "farito", "optica", "lampara", "foco", "giro", "antiniebla", "stop", "retroceso", "iluminac"]
+  },
+  {
+    category: "Espejos y Levantacristales",
+    keywords: ["espejo", "luna", "levantacristal", "alza cristal", "alzacristal", "colisa", "cristal", "vidrio"]
+  },
+  {
+    category: "Manijas y Cerraduras",
+    keywords: ["manija", "cerradura", "cilindro", "tambor", "llave", "bisagra", "traba", "picaporte", "porton"]
+  },
+  {
+    category: "Tazas y Molduras",
+    keywords: ["taza", "tazon", "moldura", "paragolpe", "parrilla", "bagueta", "emblema", "insignia", "alma de paragolpe", "absorvedor"]
+  },
+  {
+    category: "Volantes Deportivos y Accesorios",
+    keywords: ["volante", "funda", "alfombra", "cubre", "cosmetica", "bocina", "escobilla", "limpiaparabrisas", "accesorio", "resorte neumatico"]
+  }
+];
+
+/**
+ * Mapea el rubro de un Excel (ej. InformedeStock2.xlsx) a las categorías macro de la tienda.
+ */
+export function mapRubroToStoreCategory(rubro) {
+  const norm = normalizeName(rubro || "");
+  if (!norm) return "Otros Repuestos";
+
+  for (const rule of RUBRO_CATEGORY_RULES) {
+    if (rule.keywords.some(kw => norm.includes(kw))) {
+      return rule.category;
+    }
+  }
+  return "Otros Repuestos";
+}
+
+function toTitleCase(text) {
+  return String(text || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\b([a-záéíóúñ])/gi, (_, ch) => ch.toUpperCase());
+}
+
+/**
+ * Normaliza marcas provenientes de listas ERP/Excel (ej. "UNIVERSAL" -> "Universal").
+ */
+export function normalizeBrandLabel(rawBrand) {
+  const clean = String(rawBrand || "").replace(/\s+/g, " ").trim();
+  if (!clean || normalizeName(clean) === "universal") return "Universal";
+  return toTitleCase(clean);
+}
+
+function parseLocaleNumber(val) {
+  if (typeof val === "number") return Number.isFinite(val) ? val : 0;
+  const raw = String(val ?? "").trim();
+  if (!raw) return 0;
+  // Detect comma-decimal formats (e.g. "13.347,26" or "13347,26") vs dot-decimal ("13347.26")
+  const hasComma = raw.includes(",");
+  const hasDot = raw.includes(".");
+  let normalized = raw;
+  if (hasComma && hasDot) {
+    normalized = raw.lastIndexOf(",") > raw.lastIndexOf(".")
+      ? raw.replace(/\./g, "").replace(",", ".")
+      : raw.replace(/,/g, "");
+  } else if (hasComma) {
+    normalized = raw.replace(",", ".");
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+const IMPORT_HEADER_ALIASES = {
+  code: ["codigo", "cod", "sku", "id", "articulo"],
+  name: ["producto", "nombre", "descripcion", "articulo", "title"],
+  stock: ["stock", "cantidad", "existencia", "qty"],
+  brand: ["marca", "brand"],
+  rubro: ["rubro", "categoria", "category", "linea"],
+  price: ["precio venta", "precio", "precio lista", "pventa", "price", "importe"]
+};
+
+function findHeaderColumnMap(row) {
+  const map = {};
+  (row || []).forEach((cell, idx) => {
+    const norm = normalizeName(cell || "");
+    if (!norm) return;
+    for (const [field, aliases] of Object.entries(IMPORT_HEADER_ALIASES)) {
+      if (map[field] !== undefined) continue;
+      if (aliases.some(alias => norm === alias || (field === "price" && norm.startsWith("precio venta")))) {
+        map[field] = idx;
+      }
+    }
+  });
+  return map.name !== undefined && (map.code !== undefined || map.price !== undefined) ? map : null;
+}
+
+/**
+ * Parsea filas 2D de una planilla Excel/CSV (incluidos informes con encabezados arriba de todo),
+ * normaliza precios (con o sin IVA), ajusta stocks negativos a 0 (requerimiento DB >= 0),
+ * y deduplica por código.
+ */
+export function normalizeCatalogImportRows(matrixRows, { vatMultiplier = 1 } = {}) {
+  const emptyStats = {
+    totalDataRows: 0,
+    validCount: 0,
+    clampedStockCount: 0,
+    zeroPriceCount: 0,
+    duplicateCodeCount: 0
+  };
+  if (!Array.isArray(matrixRows) || matrixRows.length === 0) {
+    return { items: [], stats: emptyStats };
+  }
+
+  let headerIdx = -1;
+  let colMap = null;
+  for (let i = 0; i < Math.min(matrixRows.length, 25); i++) {
+    const detected = findHeaderColumnMap(matrixRows[i]);
+    if (detected) {
+      headerIdx = i;
+      colMap = detected;
+      break;
+    }
+  }
+
+  if (headerIdx === -1 || !colMap) {
+    return { items: [], stats: emptyStats };
+  }
+
+  const mult = Number(vatMultiplier) > 0 ? Number(vatMultiplier) : 1;
+  const byCode = new Map();
+  const uncodedItems = [];
+  const stats = { ...emptyStats };
+
+  for (let r = headerIdx + 1; r < matrixRows.length; r++) {
+    const row = matrixRows[r];
+    if (!Array.isArray(row)) continue;
+
+    const rawName = String(row[colMap.name] ?? "").replace(/\s+/g, " ").trim();
+    const rawCode = colMap.code !== undefined ? String(row[colMap.code] ?? "").trim() : "";
+    if (!rawName) continue;
+
+    stats.totalDataRows += 1;
+
+    const rawStock = colMap.stock !== undefined ? parseLocaleNumber(row[colMap.stock]) : 0;
+    const roundedStock = Math.round(rawStock);
+    const safeStock = Math.max(0, roundedStock);
+    if (roundedStock < 0) stats.clampedStockCount += 1;
+
+    const rawPrice = colMap.price !== undefined ? parseLocaleNumber(row[colMap.price]) : 0;
+    const finalPrice = Math.max(0, round2(rawPrice * mult));
+    if (finalPrice <= 0) stats.zeroPriceCount += 1;
+
+    const rawRubro = colMap.rubro !== undefined ? String(row[colMap.rubro] ?? "").replace(/\s+/g, " ").trim() : "";
+    const rawBrand = colMap.brand !== undefined ? String(row[colMap.brand] ?? "") : "Universal";
+
+    const item = {
+      code: rawCode,
+      name: rawName,
+      description: rawRubro ? (rawCode ? `${rawRubro} · Cód. ${rawCode}` : rawRubro) : (rawCode ? `Cód. ${rawCode}` : rawName),
+      category: mapRubroToStoreCategory(rawRubro || rawName),
+      brand: normalizeBrandLabel(rawBrand),
+      model: "Todos",
+      year_start: 1990,
+      year_end: 2026,
+      price: finalPrice,
+      stock: safeStock,
+      image_url: ""
+    };
+
+    if (rawCode) {
+      const codeKey = rawCode.toLowerCase();
+      if (byCode.has(codeKey)) stats.duplicateCodeCount += 1;
+      byCode.set(codeKey, item);
+    } else {
+      uncodedItems.push(item);
+    }
+  }
+
+  const items = [...byCode.values(), ...uncodedItems];
+  stats.validCount = items.length;
+  return { items, stats };
+}

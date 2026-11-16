@@ -1090,9 +1090,14 @@
               <span>Gestionar Catálogo Online</span>
               <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 500;" id="admin-results-count">Cargando catálogo...</span>
             </div>
-            <button id="open-modal-btn" class="admin-btn admin-btn-accent" style="padding: 8px var(--spacing-md); font-size: 0.8rem; border-radius: var(--radius-md);" type="button">
-              ➕ Cargar Producto Nuevo
-            </button>
+            <div style="display: flex; gap: var(--spacing-sm); flex-wrap: wrap;">
+              <button id="open-import-modal-btn" class="admin-btn admin-btn-primary" style="padding: 8px var(--spacing-md); font-size: 0.8rem; border-radius: var(--radius-md);" type="button">
+                📥 Importar Excel
+              </button>
+              <button id="open-modal-btn" class="admin-btn admin-btn-accent" style="padding: 8px var(--spacing-md); font-size: 0.8rem; border-radius: var(--radius-md);" type="button">
+                ➕ Cargar Producto Nuevo
+              </button>
+            </div>
           </h3>
           
           <div class="admin-filters-container">
@@ -1100,7 +1105,7 @@
               type="text" 
               id="admin-search-filter" 
               class="form-control admin-filter-control" 
-              placeholder="🔍 Buscar por nombre, marca o modelo..." 
+              placeholder="🔍 Buscar por código, nombre, marca o modelo..." 
               style="flex: 2; min-width: 200px;"
             >
             <select 
@@ -1114,6 +1119,7 @@
               <option value="Manijas y Cerraduras">Manijas y Cerraduras</option>
               <option value="Volantes Deportivos y Accesorios">Volantes Deportivos y Accesorios</option>
               <option value="Tazas y Molduras">Tazas y Molduras</option>
+              <option value="Otros Repuestos">Otros Repuestos</option>
             </select>
             <button 
               id="admin-reset-filters" 
@@ -1127,6 +1133,14 @@
           </div>
 
           <div class="products-list-wrapper" id="admin-products-list"></div>
+
+          <div id="admin-pagination-bar" style="display: none; justify-content: space-between; align-items: center; gap: var(--spacing-sm); padding-top: var(--spacing-md); border-top: 1px solid var(--border-light); margin-top: var(--spacing-sm); flex-wrap: wrap;">
+            <span id="admin-page-info" style="font-size: 0.82rem; color: var(--text-secondary); font-weight: 600;">Página 1 de 1</span>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" id="admin-prev-page" class="admin-btn admin-btn-primary" style="padding: 6px 14px; font-size: 0.8rem;">← Anterior</button>
+              <button type="button" id="admin-next-page" class="admin-btn admin-btn-primary" style="padding: 6px 14px; font-size: 0.8rem;">Siguiente →</button>
+            </div>
+          </div>
         </section>
       </div>
     </div>
@@ -1606,6 +1620,7 @@
               <option value="Manijas y Cerraduras">Manijas y Cerraduras</option>
               <option value="Volantes Deportivos y Accesorios">Volantes Deportivos y Accesorios</option>
               <option value="Tazas y Molduras">Tazas y Molduras</option>
+              <option value="Otros Repuestos">Otros Repuestos</option>
             </select>
           </div>
 
@@ -1889,8 +1904,9 @@
             <span style="font-size: 0.8rem; font-weight: 700; color: #065F46; display: block; margin-block-end: 6px;">📦 Reponer Stock al Catálogo (Opcional)</span>
             <div class="form-row">
               <div class="form-group" style="flex: 2;">
-                <label for="purchase-stock-product" class="form-label">Repuesto a Aumentar Stock</label>
-                <select id="purchase-stock-product" class="form-control">
+                <label for="purchase-stock-search" class="form-label">Buscar Repuesto (Código o Nombre)</label>
+                <input type="text" id="purchase-stock-search" class="form-control" placeholder="Filtrar catálogo por código o nombre..." style="margin-bottom: 6px;">
+                <select id="purchase-stock-product" class="form-control" aria-label="Repuesto a Aumentar Stock">
                   <option value="">-- Ninguno (No modificar stock) --</option>
                 </select>
               </div>
@@ -2093,12 +2109,57 @@
       </section>
     </dialog>
 
+    <!-- MODAL 6: BULK EXCEL / CSV CATALOG IMPORTER -->
+    <dialog id="import-excel-modal" class="erp-modal">
+      <section class="admin-card" style="position: relative; margin: 0;">
+        <button type="button" class="close-modal-btn" id="close-import-modal-x" title="Cerrar ventana">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="inline-size: 20px; block-size: 20px;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <h3 class="admin-card-title" style="padding-inline-end: 24px;">
+          <span>📥 Importar Catálogo desde Excel / CSV</span>
+        </h3>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 var(--spacing-md);">
+          Compatible con planillas de stock masivo (ej. <strong>InformedeStock2.xlsx</strong> con Código, Producto, Stock, Marca, Rubro y Precio Venta). Se sube por lotes para evitar duplicados y normaliza stocks negativos a 0.
+        </p>
+
+        <div class="admin-form">
+          <div class="form-group">
+            <label for="excel-file-input" class="form-label">Seleccionar archivo (.xlsx, .xls o .csv)</label>
+            <input type="file" id="excel-file-input" class="form-control" accept=".xlsx,.xls,.csv">
+          </div>
+
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--text-primary); cursor: pointer;">
+            <input type="checkbox" id="excel-add-iva-check">
+            <span>Sumar IVA (+21%) al Precio Venta del Excel (si el informe viene Sin IVA)</span>
+          </label>
+
+          <div id="excel-preview-box" style="display: none; background-color: var(--bg-surface-low); padding: var(--spacing-md); border-radius: var(--radius-md); border: 1px solid var(--border-light); font-size: 0.82rem; line-height: 1.5;"></div>
+
+          <div id="excel-progress-box" style="display: none;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 600; margin-bottom: 4px;">
+              <span id="excel-progress-label">Preparando lotes...</span>
+              <span id="excel-progress-pct">0%</span>
+            </div>
+            <div style="width: 100%; height: 10px; background: #E2E8F0; border-radius: 999px; overflow: hidden;">
+              <div id="excel-progress-fill" style="width: 0%; height: 100%; background: var(--primary-navy); transition: width 0.2s ease;"></div>
+            </div>
+          </div>
+
+          <button type="button" id="start-excel-import-btn" class="admin-btn admin-btn-accent" style="width: 100%; padding: 12px; font-weight: 700;" disabled>
+            <span>Subir e Importar Catálogo</span>
+          </button>
+        </div>
+      </section>
+    </dialog>
+
   </div>
 
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
   <!-- Supabase Connection via script modules -->
-  <script type="module" src="control.js?v=18"></script>
+  <script type="module" src="control.js?v=19"></script>
 </body>
 </html>
