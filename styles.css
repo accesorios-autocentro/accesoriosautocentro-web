@@ -968,6 +968,100 @@ aside.filter-sidebar {
   stroke-width: 2px;
 }
 
+.add-to-cart-btn:disabled {
+  background-color: var(--bg-surface-low);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+/* Inline quantity control on product cards when item is already in cart */
+.card-cart-slot {
+  inline-size: 100%;
+}
+
+.card-qty-control {
+  inline-size: 100%;
+  min-block-size: 40px;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  background-color: var(--accent-yellow);
+  color: var(--text-on-yellow);
+  border: 1.5px solid var(--primary-navy);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.card-qty-btn {
+  inline-size: 38px;
+  flex-shrink: 0;
+  border: none;
+  background-color: var(--primary-navy);
+  color: #FFFFFF;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.card-qty-btn:hover:not(:disabled) {
+  background-color: var(--secondary-navy);
+}
+
+.card-qty-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.card-qty-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 6px;
+  cursor: text;
+}
+
+.card-qty-input {
+  inline-size: 3ch;
+  min-inline-size: 2ch;
+  border: none;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--primary-navy);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-align: center;
+  border-radius: 4px;
+  padding: 2px 3px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.card-qty-input::-webkit-outer-spin-button,
+.card-qty-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.card-qty-input:focus {
+  outline: 2px solid var(--primary-navy);
+  background: #FFFFFF;
+}
+
+.card-qty-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-on-yellow);
+  white-space: nowrap;
+}
+
 /* --- NEW: INTERACTIVE MAP & CONTACT SECTION --- */
 .location-section {
   background-color: var(--bg-surface);
@@ -2016,6 +2110,24 @@ footer.app-footer {
     padding: 9px 10px;
     font-size: 0.78rem;
     border-radius: 6px;
+  }
+
+  .card-qty-control {
+    min-block-size: 36px;
+  }
+
+  .card-qty-btn {
+    inline-size: 32px;
+    font-size: 0.95rem;
+  }
+
+  .card-qty-input {
+    font-size: 0.82rem;
+    inline-size: 2.6ch;
+  }
+
+  .card-qty-label {
+    font-size: 0.68rem;
   }
 
   .display-header h3 {

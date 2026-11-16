@@ -509,73 +509,144 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="price-stock-wrapper">
             <span class="product-price">${formatARS(p.price)}</span>
           </div>
-          <button class="add-to-cart-btn" data-product-id="${escapeHtml(p.id)}">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            <span>Añadir al carrito</span>
-          </button>
+          <div class="card-cart-slot" data-product-id="${escapeHtml(p.id)}"></div>
         </div>
       `;
 
-      // Hook up add button
-      const addBtn = card.querySelector(".add-to-cart-btn");
-      addBtn.addEventListener("click", () => {
-        addToCart(p);
-      });
-
+      renderCardCartSlot(card.querySelector(".card-cart-slot"), p);
       productGrid.appendChild(card);
     });
   }
 
-  // --- ADD TO SHOPPING CART ACTION ---
-  function addToCart(product) {
-    // Check if product is already in the cart
-    const existing = cart.find(item => item.product.id === product.id);
+  function renderCardCartSlot(slot, product) {
+    if (!slot || !product) return;
+    const cartItem = cart.find(item => String(item.product.id) === String(product.id));
+    const qtyInCart = cartItem ? cartItem.quantity : 0;
 
-    if (existing) {
-      if (existing.quantity < product.stock) {
-        existing.quantity += 1;
-      } else {
-        alert(`Disculpas, no disponemos de más stock para: ${product.name}`);
-        return;
+    if (qtyInCart > 0) {
+      slot.innerHTML = `
+        <div class="card-qty-control" role="group" aria-label="Cantidad de ${escapeHtml(product.name)} en el carrito">
+          <button type="button" class="card-qty-btn dec-btn" aria-label="Disminuir cantidad">−</button>
+          <label class="card-qty-center">
+            <input
+              type="number"
+              class="card-qty-input"
+              min="0"
+              max="${Number(product.stock) || 999}"
+              value="${qtyInCart}"
+              inputmode="numeric"
+              aria-label="Cantidad en el carrito"
+            >
+            <span class="card-qty-label">en carrito</span>
+          </label>
+          <button type="button" class="card-qty-btn inc-btn" aria-label="Aumentar cantidad" ${qtyInCart >= product.stock ? "disabled" : ""}>+</button>
+        </div>
+      `;
+
+      const decBtn = slot.querySelector(".dec-btn");
+      const incBtn = slot.querySelector(".inc-btn");
+      const qtyInput = slot.querySelector(".card-qty-input");
+
+      decBtn.addEventListener("click", () => updateQuantity(product.id, -1));
+      incBtn.addEventListener("click", () => updateQuantity(product.id, 1));
+      qtyInput.addEventListener("change", (e) => {
+        const parsed = parseInt(e.target.value, 10);
+        if (Number.isNaN(parsed)) {
+          e.target.value = String(qtyInCart);
+          return;
+        }
+        setProductQuantity(product, parsed);
+      });
+      return;
+    }
+
+    if (Number(product.stock) <= 0) {
+      slot.innerHTML = `
+        <button type="button" class="add-to-cart-btn" disabled>
+          <span>Sin stock</span>
+        </button>
+      `;
+      return;
+    }
+
+    slot.innerHTML = `
+      <button type="button" class="add-to-cart-btn" data-product-id="${escapeHtml(product.id)}">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        <span>Añadir al carrito</span>
+      </button>
+    `;
+
+    slot.querySelector(".add-to-cart-btn").addEventListener("click", () => {
+      addToCart(product);
+    });
+  }
+
+  function syncProductCardsActions() {
+    if (!productGrid) return;
+    const slots = productGrid.querySelectorAll(".card-cart-slot[data-product-id]");
+    slots.forEach((slot) => {
+      const pid = slot.getAttribute("data-product-id");
+      const product = products.find(p => String(p.id) === String(pid))
+        || (cart.find(item => String(item.product.id) === String(pid)) || {}).product;
+      if (product) {
+        renderCardCartSlot(slot, product);
       }
+    });
+  }
+
+  // --- CART QUANTITY HELPERS ---
+  function applyCartQuantity(product, nextQty, { showAddedToast = false } = {}) {
+    if (!product) return;
+
+    if (nextQty <= 0) {
+      removeFromCart(product.id);
+      return;
+    }
+
+    const maxStock = Number(product.stock) || 0;
+    if (nextQty > maxStock) {
+      showToast(`Stock máximo disponible para ${product.name}: ${maxStock}`);
+      nextQty = maxStock;
+      if (nextQty <= 0) return;
+    }
+
+    const existing = cart.find(item => String(item.product.id) === String(product.id));
+    if (existing) {
+      existing.product = product;
+      existing.quantity = nextQty;
     } else {
-      cart.push({ product, quantity: 1 });
+      cart.push({ product, quantity: nextQty });
     }
 
     saveCart();
     renderCart();
     animateCartBadge();
-    
-    // Show a beautiful premium toast instead of disrupting navigation
-    showToast(`¡Añadido al pedido: ${product.name}!`);
+
+    if (showAddedToast) {
+      showToast(`¡Añadido al pedido: ${product.name}!`);
+    }
   }
 
-  // --- MANIPULATE QUANTITIES AND REMOVALS ---
+  function addToCart(product) {
+    const existing = cart.find(item => String(item.product.id) === String(product.id));
+    const nextQty = existing ? existing.quantity + 1 : 1;
+    applyCartQuantity(product, nextQty, { showAddedToast: !existing });
+  }
+
   function updateQuantity(productId, change) {
-    const item = cart.find(i => i.product.id === productId);
+    const item = cart.find(i => String(i.product.id) === String(productId));
     if (!item) return;
+    applyCartQuantity(item.product, item.quantity + change);
+  }
 
-    const newQty = item.quantity + change;
-    
-    if (newQty <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-
-    if (newQty > item.product.stock) {
-      alert(`Límite de stock alcanzado para: ${item.product.name}`);
-      return;
-    }
-
-    item.quantity = newQty;
-    saveCart();
-    renderCart();
+  function setProductQuantity(product, nextQty) {
+    applyCartQuantity(product, nextQty);
   }
 
   function removeFromCart(productId) {
-    cart = cart.filter(item => item.product.id !== productId);
+    cart = cart.filter(item => String(item.product.id) !== String(productId));
     saveCart();
     renderCart();
   }
@@ -636,6 +707,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- RENDER CART DRAWER CONTENTS ---
   function renderCart() {
     cartItemsContainer.innerHTML = "";
+    syncProductCardsActions();
     
     let subtotal = 0;
     let totalItems = 0;
