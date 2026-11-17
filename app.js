@@ -1,8 +1,11 @@
 import { supabase, fetchAllProducts } from "./supabase-client.js?v=2";
-import { escapeHtml, normalizeName } from "./erp-logic.mjs?v=3";
+import { escapeHtml, normalizeName, buildVehicleInquiryWhatsAppUrl } from "./erp-logic.mjs?v=4";
 
 // --- MAIN APPLICATION LOGIC ---
 document.addEventListener("DOMContentLoaded", () => {
+  // Feature flag: keep full online catalog & cart preserved while temporarily paused in public UI
+  const ENABLE_ONLINE_CATALOG = false;
+
   // --- STATE MACHINE ---
   const STOREFRONT_PAGE_SIZE = 24;
   let products = []; // Populated dynamically from Supabase (paginated past 1,000 limit)
@@ -46,6 +49,19 @@ document.addEventListener("DOMContentLoaded", () => {
   initApp();
 
   function initApp() {
+    setupVehicleInquiryForm();
+
+    if (!ENABLE_ONLINE_CATALOG) {
+      document.querySelectorAll("[data-footer-category]").forEach((link) => {
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          const cat = link.dataset.footerCategory || "";
+          focusInquiryForm(cat ? `${cat}: ` : "");
+        });
+      });
+      return;
+    }
+
     // 1. Load cart from LocalStorage
     try {
       const savedCart = localStorage.getItem("autocentro_cart");
@@ -894,5 +910,237 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const encodedText = encodeURIComponent(message);
     return `https://wa.me/${whatsappNum}?text=${encodedText}`;
+  }
+
+  // --- VEHICLE ORDER / QUOTE INQUIRY FORM -> WHATSAPP ---
+  function focusInquiryForm(productSample = "") {
+    const section = document.getElementById("consulta-pedido");
+    const productField = document.getElementById("inquiry-product");
+    const brandField = document.getElementById("inquiry-brand");
+
+    if (productField && productSample) {
+      const currentVal = productField.value.trim();
+      const wasPrefilled = productField.dataset.prefilled === "true";
+      if (!currentVal || wasPrefilled) {
+        productField.value = productSample;
+        productField.dataset.prefilled = "true";
+      }
+    }
+
+    if (section) {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (brandField) {
+      setTimeout(() => brandField.focus({ preventScroll: true }), 300);
+    }
+  }
+
+  function setupVehicleInquiryForm() {
+    const form = document.getElementById("inquiry-form");
+    const statusBox = document.getElementById("inquiry-status");
+    const submitBtn = document.getElementById("inquiry-submit-btn");
+    const productField = document.getElementById("inquiry-product");
+    if (!form) return;
+
+    if (productField) {
+      productField.addEventListener("input", () => {
+        productField.dataset.prefilled = "false";
+      });
+    }
+
+    document.querySelectorAll(".rubro-consult-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        focusInquiryForm(btn.dataset.rubroSample || "");
+      });
+    });
+
+    // Polite screen-reader live region & :user-invalid ARIA sync
+    const linkError = (el, shown) => {
+      const errorId = el.dataset.error;
+      if (!errorId) return;
+      const ids = (el.getAttribute("aria-describedby") || "")
+        .split(/\s+/)
+        .filter((id) => id && id !== errorId);
+      if (shown) ids.push(errorId);
+      if (ids.length) el.setAttribute("aria-describedby", ids.join(" "));
+      else el.removeAttribute("aria-describedby");
+    };
+
+    const announcer = document.createElement("div");
+    announcer.setAttribute("aria-live", "polite");
+    announcer.classList.add("visually-hidden");
+    document.body.append(announcer);
+    let announceTimer;
+    let announcedField;
+
+    const spokenText = (node) => {
+      const copy = node.cloneNode(true);
+      copy.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+      copy.querySelectorAll('[role="img"][aria-label]').forEach((n) => n.replaceWith(`${n.getAttribute("aria-label")}: `));
+      return copy.textContent.replace(/\s+/g, " ").trim();
+    };
+
+    const announceError = (el) => {
+      const error = document.getElementById(el.dataset.error);
+      if (!error) return;
+      const label = el.labels?.[0] ? `${spokenText(el.labels[0])}: ` : "";
+      clearTimeout(announceTimer);
+      announcer.textContent = "";
+      announcedField = el;
+      announceTimer = setTimeout(() => {
+        announcer.textContent = label + spokenText(error);
+      }, 500);
+    };
+
+    form.noValidate = true;
+    const supportsUserInvalid = CSS.supports("selector(:user-invalid)");
+    const dirtyState = new WeakMap();
+    const flagged = new WeakSet();
+    const announced = new WeakSet();
+    let submitAttempted = false;
+
+    const isFieldInvalid = (el) => {
+      if (supportsUserInvalid) {
+        return el.matches(":user-invalid") || (submitAttempted && !el.validity.valid);
+      }
+      const state = dirtyState.get(el);
+      return Boolean((state?.hasBlurred || submitAttempted) && !el.validity.valid);
+    };
+
+    const syncAria = (el, announce = false) => {
+      if (!el?.matches?.("input, select, textarea")) return;
+      const invalid = isFieldInvalid(el);
+      if (submitAttempted || (!supportsUserInvalid && dirtyState.get(el)?.hasBlurred)) {
+        el.classList.toggle("user-invalid-fallback", invalid);
+      } else {
+        el.classList.remove("user-invalid-fallback");
+      }
+      if (invalid) {
+        if (announce && !announced.has(el)) {
+          announceError(el);
+          announced.add(el);
+        }
+        el.setAttribute("aria-invalid", "true");
+        linkError(el, true);
+        flagged.add(el);
+      } else if (flagged.has(el) || el.getAttribute("aria-invalid") !== "true") {
+        el.setAttribute("aria-invalid", "false");
+        linkError(el, false);
+        flagged.delete(el);
+        announced.delete(el);
+        if (announcedField === el) {
+          clearTimeout(announceTimer);
+          announcer.textContent = "";
+        }
+      }
+    };
+
+    const fields = [...form.querySelectorAll("input, select, textarea")];
+    fields.forEach((el) => syncAria(el));
+
+    form.addEventListener("blur", (e) => {
+      const el = e.target;
+      if (!el?.matches?.("input, select, textarea")) return;
+      const state = dirtyState.get(el) || { hasInteracted: false, hasBlurred: false };
+      state.hasBlurred = true;
+      dirtyState.set(el, state);
+      if (supportsUserInvalid || state.hasInteracted) syncAria(el, true);
+    }, true);
+
+    form.addEventListener("input", (e) => {
+      const el = e.target;
+      if (!el?.matches?.("input, select, textarea")) return;
+      el.setCustomValidity("");
+      const state = dirtyState.get(el) || { hasInteracted: false, hasBlurred: false };
+      state.hasInteracted = true;
+      dirtyState.set(el, state);
+      if (el.hasAttribute("aria-invalid")) syncAria(el);
+    });
+
+    form.addEventListener("change", (e) => {
+      const el = e.target;
+      if (!el?.matches?.("input, select, textarea")) return;
+      syncAria(el, true);
+    }, true);
+
+    form.addEventListener("invalid", (e) => {
+      e.preventDefault();
+      const el = e.target;
+      dirtyState.set(el, { hasInteracted: true, hasBlurred: true });
+      announced.add(el);
+      syncAria(el);
+    }, true);
+
+    form.addEventListener("reset", () => {
+      submitAttempted = false;
+      setTimeout(() => {
+        fields.forEach((el) => {
+          dirtyState.delete(el);
+          el.classList.remove("user-invalid-fallback");
+          syncAria(el);
+        });
+      });
+    });
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      if (!form.checkValidity()) {
+        submitAttempted = true;
+        const firstInvalid = fields.find((el) => !el.validity.valid);
+        fields.forEach((el) => {
+          if (!el.validity.valid) {
+            dirtyState.set(el, { hasInteracted: true, hasBlurred: true });
+            syncAria(el);
+          }
+        });
+        if (firstInvalid) firstInvalid.focus();
+        return;
+      }
+
+      const payload = {
+        brand: document.getElementById("inquiry-brand").value,
+        model: document.getElementById("inquiry-model").value,
+        year: document.getElementById("inquiry-year").value,
+        product: document.getElementById("inquiry-product").value,
+        fullName: document.getElementById("inquiry-name").value,
+        phone: document.getElementById("inquiry-phone").value
+      };
+
+      const whatsappUrl = buildVehicleInquiryWhatsAppUrl(payload);
+      if (submitBtn) submitBtn.disabled = true;
+
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+
+      if (statusBox) {
+        statusBox.hidden = false;
+        statusBox.innerHTML = `
+          <p><strong>¡Pedido preparado!</strong> Abrimos WhatsApp con los datos de tu <strong>${escapeHtml(payload.brand.trim())} ${escapeHtml(payload.model.trim())} (${escapeHtml(payload.year.trim())})</strong>.</p>
+          <div class="inquiry-status-actions">
+            <a href="${escapeHtml(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="inquiry-fallback-link">
+              Abrir WhatsApp ahora
+            </a>
+            <button type="button" class="inquiry-reset-btn" id="inquiry-new-btn">Hacer otra consulta</button>
+          </div>
+        `;
+        const newBtn = document.getElementById("inquiry-new-btn");
+        if (newBtn) {
+          newBtn.addEventListener("click", () => {
+            form.reset();
+            statusBox.hidden = true;
+            if (productField) productField.dataset.prefilled = "false";
+            const brandEl = document.getElementById("inquiry-brand");
+            if (brandEl) brandEl.focus();
+          });
+        }
+      }
+
+      showToast("¡Pedido listo en WhatsApp!");
+      if (submitBtn) {
+        setTimeout(() => {
+          submitBtn.disabled = false;
+        }, 600);
+      }
+    });
   }
 });

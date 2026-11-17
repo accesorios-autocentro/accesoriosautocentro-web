@@ -17,7 +17,7 @@
   <meta property="og:locale" content="es_AR">
 
   <!-- Core Stylesheets -->
-  <link rel="stylesheet" href="styles.css?v=17">
+  <link rel="stylesheet" href="styles.css?v=18">
 </head>
 <body>
 
@@ -42,8 +42,15 @@
         </div>
       </a>
 
-      <!-- Instant Search Filter -->
-      <div class="header-search-wrapper">
+      <!-- Primary Navigation (Temporary Lead/Quote Mode) -->
+      <nav class="header-nav-links" aria-label="Navegación principal">
+        <a href="#rubros" class="header-nav-link">Qué vendemos</a>
+        <a href="#ubicacion" class="header-nav-link">Ubicación</a>
+        <a href="#consulta-pedido" class="header-nav-cta">Hacer Pedido</a>
+      </nav>
+
+      <!-- Instant Search Filter (Preserved, temporarily hidden while online catalog is paused) -->
+      <div class="header-search-wrapper" hidden inert>
         <search>
           <form class="search-form" id="search-form" onsubmit="event.preventDefault();">
             <label for="search-input" class="visual-hide" style="display: none;">Buscar autopartes...</label>
@@ -63,8 +70,8 @@
         </search>
       </div>
 
-      <!-- Action Items: Shopping Cart Toggle Button -->
-      <div class="header-actions">
+      <!-- Action Items: Shopping Cart Toggle Button (Preserved, temporarily hidden) -->
+      <div class="header-actions" hidden inert>
         <!-- Declarative Invoker to Open Cart Dialog Modal -->
         <button 
           class="cart-toggle-btn" 
@@ -93,14 +100,14 @@
         Con más de 30 años de trayectoria comercial en Rosario, equipamos tu auto con repuestos originales y nacionales de máxima calidad. Especialistas en faros, ópticas, espejos, levantacristales, cerraduras, manijas, volantes deportivos y tazas. Te ofrecemos asesoramiento experto y calidez en la atención en nuestro local ubicado en pleno centro de la ciudad.
       </p>
       <div class="intro-cta-wrapper">
-        <a href="#storefront" class="intro-primary-btn">
-          <span>Ver Catálogo Online</span>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+        <a href="#consulta-pedido" class="intro-primary-btn">
+          <span>Pedir o Consultar Repuesto</span>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
           </svg>
         </a>
-        <a href="#ubicacion" class="intro-secondary-btn">
-          <span>Cómo llegar</span>
+        <a href="#rubros" class="intro-secondary-btn">
+          <span>Ver qué vendemos</span>
         </a>
       </div>
     </div>
@@ -134,8 +141,329 @@
     </div>
   </section>
 
-  <!-- MAIN STOREFRONT WRAPPER -->
-  <main class="main-container" id="storefront">
+  <!-- MAIN LANDING CONTENT: WHAT WE SELL + ORDER INQUIRY FORM -->
+  <main id="main-content">
+
+    <!-- SECTION 1: SUMMARY OF WHAT WE SELL -->
+    <section class="catalog-summary-section" id="rubros" aria-labelledby="rubros-heading">
+      <div class="section-shell">
+        <div class="section-header-block">
+          <span class="section-eyebrow">Qué comercializamos</span>
+          <h2 id="rubros-heading">Todo lo que necesitás para tu vehículo</h2>
+          <p class="section-lead">
+            Trabajamos repuestos originales, alternativos y accesorios de carrocería e interior para autos, camionetas y utilitarios nacionales e importados.
+          </p>
+        </div>
+
+        <ul class="rubros-grid">
+          <li class="rubro-card">
+            <div class="rubro-card-top">
+              <div class="rubro-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+                </svg>
+              </div>
+              <h3>Faros y Ópticas</h3>
+              <p>Ópticas delanteras, faros traseros, faritos de giro, antinieblas, acrílicos y lámparas homologadas.</p>
+            </div>
+            <button type="button" class="rubro-consult-btn" data-rubro-sample="Óptica o faro para ">
+              <span>Consultar por faros u ópticas</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </li>
+
+          <li class="rubro-card">
+            <div class="rubro-card-top">
+              <div class="rubro-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                </svg>
+              </div>
+              <h3>Paragolpes, Parrillas y Tazas</h3>
+              <p>Paragolpes, almas absorbedoras, parrillas de frente, molduras cromadas, baguetas, insignias y tazas de rueda.</p>
+            </div>
+            <button type="button" class="rubro-consult-btn" data-rubro-sample="Paragolpe, parrilla o taza para ">
+              <span>Consultar por paragolpes o tazas</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </li>
+
+          <li class="rubro-card">
+            <div class="rubro-card-top">
+              <div class="rubro-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+                </svg>
+              </div>
+              <h3>Alfombras e Interior</h3>
+              <p>Juegos de alfombras de goma PVC y pesada a medida, cubrevolantes, volantes deportivos, bochas y fundas.</p>
+            </div>
+            <button type="button" class="rubro-consult-btn" data-rubro-sample="Juego de alfombras / accesorios interior para ">
+              <span>Consultar por alfombras</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </li>
+
+          <li class="rubro-card">
+            <div class="rubro-card-top">
+              <div class="rubro-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                </svg>
+              </div>
+              <h3>Espejos y Levantacristales</h3>
+              <p>Espejos exteriores completos, lunas, carcasas, brazos, colisas y máquinas alza cristal manuales o eléctricas.</p>
+            </div>
+            <button type="button" class="rubro-consult-btn" data-rubro-sample="Espejo o levantacristal para ">
+              <span>Consultar por espejos</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </li>
+
+          <li class="rubro-card">
+            <div class="rubro-card-top">
+              <div class="rubro-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" />
+                </svg>
+              </div>
+              <h3>Manijas, Cerraduras y Burletes</h3>
+              <p>Manijas exteriores e interiores, cilindros con llave, cerraduras de puertas y baúl, bisagras y burletes.</p>
+            </div>
+            <button type="button" class="rubro-consult-btn" data-rubro-sample="Manija o cerradura para ">
+              <span>Consultar por cerraduras</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </li>
+
+          <li class="rubro-card">
+            <div class="rubro-card-top">
+              <div class="rubro-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                </svg>
+              </div>
+              <h3>Eléctricos, Escobillas y Varios</h3>
+              <p>Escobillas limpiaparabrisas, bocinas, resortes neumáticos de capot y portón, grampas y repuestos generales.</p>
+            </div>
+            <button type="button" class="rubro-consult-btn" data-rubro-sample="Repuesto o accesorio para ">
+              <span>Consultar otro repuesto</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SECTION 2: ORDER / QUOTE INQUIRY FORM -> WHATSAPP -->
+    <section class="inquiry-section" id="consulta-pedido" aria-labelledby="inquiry-heading">
+      <div class="section-shell inquiry-layout">
+        <div class="inquiry-intro">
+          <span class="section-eyebrow">Atención directa por WhatsApp</span>
+          <h2 id="inquiry-heading">¿Querés comprar o consultar un repuesto?</h2>
+          <p class="section-lead">
+            Completá los datos de tu vehículo y contanos qué producto necesitás. Al enviar el formulario se abre nuestro WhatsApp con tu pedido armado para confirmarte stock y precio al instante.
+          </p>
+
+          <ol class="inquiry-steps">
+            <li>
+              <span class="step-num">1</span>
+              <div>
+                <strong>Indicá marca, modelo y año</strong>
+                <span>Nos permite verificar compatibilidad exacta en nuestro stock.</span>
+              </div>
+            </li>
+            <li>
+              <span class="step-num">2</span>
+              <div>
+                <strong>Contanos qué necesitás y tus datos</strong>
+                <span>Podés pedir ópticas, alfombras, paragolpes, espejos, manijas y más.</span>
+              </div>
+            </li>
+            <li>
+              <span class="step-num">3</span>
+              <div>
+                <strong>Enviá directo por WhatsApp</strong>
+                <span>Te respondemos rápido para coordinar retiro en Corrientes 579, Rosario.</span>
+              </div>
+            </li>
+          </ol>
+        </div>
+
+        <form id="inquiry-form" class="inquiry-card" aria-labelledby="inquiry-heading">
+          <fieldset class="inquiry-fieldset">
+            <legend>1. Datos del vehículo</legend>
+
+            <div class="inquiry-field-row">
+              <div class="inquiry-field">
+                <label for="inquiry-brand">Marca del vehículo <span class="req-mark" aria-hidden="true">*</span></label>
+                <span id="brand-hint" class="field-hint">Elegí de la lista o escribí la marca.</span>
+                <input
+                  type="text"
+                  id="inquiry-brand"
+                  name="brand"
+                  list="brand-suggestions"
+                  placeholder="Ej. Volkswagen"
+                  maxlength="50"
+                  aria-describedby="brand-hint"
+                  aria-invalid="false"
+                  data-error="brand-error"
+                  enterkeyhint="next"
+                  required
+                >
+                <div id="brand-error" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Ingresá la marca de tu vehículo (ej. Ford, Renault, Toyota).
+                </div>
+                <datalist id="brand-suggestions">
+                  <option value="Chevrolet">
+                  <option value="Citroën">
+                  <option value="Fiat">
+                  <option value="Ford">
+                  <option value="Honda">
+                  <option value="Mercedes-Benz">
+                  <option value="Nissan">
+                  <option value="Peugeot">
+                  <option value="Renault">
+                  <option value="Toyota">
+                  <option value="Volkswagen">
+                  <option value="Universal">
+                </datalist>
+              </div>
+
+              <div class="inquiry-field">
+                <label for="inquiry-model">Modelo <span class="req-mark" aria-hidden="true">*</span></label>
+                <span id="model-hint" class="field-hint">Versión o carrocería si sabés (ej. 5 puertas).</span>
+                <input
+                  type="text"
+                  id="inquiry-model"
+                  name="model"
+                  placeholder="Ej. Gol Trend / Hilux"
+                  maxlength="60"
+                  aria-describedby="model-hint"
+                  aria-invalid="false"
+                  data-error="model-error"
+                  enterkeyhint="next"
+                  required
+                >
+                <div id="model-error" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Indicá el modelo del vehículo.
+                </div>
+              </div>
+
+              <div class="inquiry-field inquiry-field-year">
+                <label for="inquiry-year">Año <span class="req-mark" aria-hidden="true">*</span></label>
+                <span id="year-hint" class="field-hint">4 dígitos (ej. 2018).</span>
+                <input
+                  type="text"
+                  id="inquiry-year"
+                  name="year"
+                  inputmode="numeric"
+                  pattern="(19[5-9][0-9]|20[0-2][0-9])"
+                  maxlength="4"
+                  placeholder="2018"
+                  aria-describedby="year-hint"
+                  aria-invalid="false"
+                  data-error="year-error"
+                  enterkeyhint="next"
+                  required
+                >
+                <div id="year-error" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Escribí un año válido de 4 dígitos (entre 1950 y 2029).
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="inquiry-fieldset">
+            <legend>2. Producto que necesitás</legend>
+
+            <div class="inquiry-field">
+              <label for="inquiry-product">¿Qué producto buscás? <span class="req-mark" aria-hidden="true">*</span></label>
+              <span id="product-hint" class="field-hint">Detallá el artículo y si lleva lado (izquierdo/conductor o derecho/acompañante).</span>
+              <textarea
+                id="inquiry-product"
+                name="product"
+                rows="3"
+                minlength="3"
+                maxlength="400"
+                placeholder="Ej. Óptica delantera derecha y juego de alfombras de goma"
+                aria-describedby="product-hint"
+                aria-invalid="false"
+                data-error="product-error"
+                required
+              ></textarea>
+              <div id="product-error" class="error-msg">
+                <span role="img" aria-label="Error">!</span> Describí brevemente qué repuesto o accesorio necesitás (mínimo 3 caracteres).
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="inquiry-fieldset">
+            <legend>3. Tus datos de contacto</legend>
+
+            <div class="inquiry-field-row inquiry-field-row-2">
+              <div class="inquiry-field">
+                <label for="inquiry-name">Nombre y Apellido <span class="req-mark" aria-hidden="true">*</span></label>
+                <input
+                  type="text"
+                  id="inquiry-name"
+                  name="full_name"
+                  autocomplete="name"
+                  minlength="2"
+                  maxlength="100"
+                  placeholder="Ej. Juan Pérez"
+                  aria-invalid="false"
+                  data-error="name-error"
+                  enterkeyhint="next"
+                  required
+                >
+                <div id="name-error" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Ingresá tu nombre y apellido.
+                </div>
+              </div>
+
+              <div class="inquiry-field">
+                <label for="inquiry-phone">Número de Teléfono <span class="req-mark" aria-hidden="true">*</span></label>
+                <span id="phone-hint" class="field-hint">Con característica (ej. 341 555-1234).</span>
+                <input
+                  type="tel"
+                  id="inquiry-phone"
+                  name="phone"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  pattern="[0-9+\-\s()]{7,20}"
+                  minlength="7"
+                  maxlength="20"
+                  placeholder="341 555-1234"
+                  aria-describedby="phone-hint"
+                  aria-invalid="false"
+                  data-error="phone-error"
+                  enterkeyhint="send"
+                  required
+                >
+                <div id="phone-error" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Ingresá un teléfono válido (al menos 7 dígitos).
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <button type="submit" class="checkout-btn inquiry-submit-btn" id="inquiry-submit-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" aria-hidden="true">
+              <path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/>
+            </svg>
+            <span>Enviar Pedido por WhatsApp</span>
+          </button>
+
+          <div id="inquiry-status" class="inquiry-status" role="status" hidden></div>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MAIN STOREFRONT WRAPPER (Preserved, temporarily hidden while online catalog is paused) -->
+  <section class="main-container" id="storefront" hidden inert>
     
     <!-- Hero Info Banner (Dynamic store highlights) -->
     <section class="hero-banner" id="hero-banner">
@@ -273,7 +601,7 @@
       </div>
     </section>
 
-  </main>
+  </section>
 
   <!-- INTERACTIVE GOOGLE MAPS & CONTACT SECTION -->
   <section class="location-section" id="ubicacion">
@@ -331,8 +659,8 @@
     </div>
   </section>
 
-  <!-- SHOPPING CART DRAWER (Native dialog overlay modal) -->
-  <dialog class="cart-drawer" id="cart-drawer" aria-labelledby="cart-title">
+  <!-- SHOPPING CART DRAWER (Preserved, temporarily hidden while online catalog is paused) -->
+  <dialog class="cart-drawer" id="cart-drawer" aria-labelledby="cart-title" hidden inert>
     
     <!-- Drawer Header -->
     <div class="cart-header">
@@ -474,7 +802,7 @@
   </footer>
 
   <!-- Scripts Connection -->
-  <script type="module" src="app.js?v=6"></script>
+  <script type="module" src="app.js?v=7"></script>
 
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>

@@ -565,3 +565,33 @@ export function normalizeCatalogImportRows(matrixRows, { vatMultiplier = 1 } = {
   stats.validCount = items.length;
   return { items, stats };
 }
+
+/**
+ * Construye la URL de WhatsApp (wa.me) para consultas/pedidos por vehículo.
+ * Formatea marca, modelo, año, producto solicitado y datos del cliente.
+ */
+export function buildVehicleInquiryWhatsAppUrl(
+  { brand, model, year, product, fullName, phone } = {},
+  whatsappNum = "5493416055274"
+) {
+  const clean = (val) => String(val ?? "").replace(/\s+/g, " ").trim();
+  const cleanProduct = String(product ?? "").trim();
+
+  const lines = [
+    "Hola Accesorios Autocentro S.R.L.! Quiero consultar/pedir el siguiente repuesto:",
+    "",
+    `*Producto que necesito:* ${cleanProduct}`,
+    "",
+    "*Datos del vehículo:*",
+    `• Marca: ${clean(brand)}`,
+    `• Modelo: ${clean(model)}`,
+    `• Año: ${clean(year)}`,
+    "",
+    "*Datos de contacto:*",
+    `• Nombre y Apellido: ${clean(fullName)}`,
+    `• Teléfono: ${clean(phone)}`
+  ];
+
+  const message = lines.join("\n");
+  return `https://wa.me/${whatsappNum}?text=${encodeURIComponent(message)}`;
+}

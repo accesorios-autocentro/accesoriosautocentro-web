@@ -23,7 +23,8 @@ import {
   filterProducts,
   mapRubroToStoreCategory,
   normalizeBrandLabel,
-  normalizeCatalogImportRows
+  normalizeCatalogImportRows,
+  buildVehicleInquiryWhatsAppUrl
 } from "../erp-logic.mjs";
 
 test("round2: rounds to 2 decimal places and handles float quirks", () => {
@@ -501,4 +502,24 @@ test("normalizeCatalogImportRows: parses InformedeStock2 style matrix, clamps ne
   assert.equal(bumper.brand, "Chevrolet-Isuzu");
   assert.equal(bumper.stock, 0);
   assert.equal(bumper.price, 0);
+});
+
+test("buildVehicleInquiryWhatsAppUrl: builds encoded wa.me link with vehicle, product, and customer info", () => {
+  const url = buildVehicleInquiryWhatsAppUrl({
+    brand: "  Toyota ",
+    model: "Hilux",
+    year: "2018",
+    product: "Óptica delantera derecha y juego de alfombras",
+    fullName: "Juan Pérez",
+    phone: "341 555-1234"
+  });
+
+  assert.ok(url.startsWith("https://wa.me/5493416055274?text="));
+  const decoded = decodeURIComponent(url.split("?text=")[1]);
+  assert.match(decoded, /Óptica delantera derecha y juego de alfombras/);
+  assert.match(decoded, /Marca: Toyota/);
+  assert.match(decoded, /Modelo: Hilux/);
+  assert.match(decoded, /Año: 2018/);
+  assert.match(decoded, /Nombre y Apellido: Juan Pérez/);
+  assert.match(decoded, /Teléfono: 341 555-1234/);
 });

@@ -2432,3 +2432,491 @@ footer.app-footer {
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   TEMPORARY LEAD / QUOTE MODE: HEADER NAV, WHAT WE SELL SUMMARY & ORDER FORM
+   ========================================================================== */
+
+[hidden] {
+  display: none !important;
+}
+
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+:where(a:any-link, button, input, select, textarea):focus-visible {
+  outline: 3px solid var(--secondary-navy);
+  outline-offset: 2px;
+}
+
+/* Header nav links (when search/cart are paused) */
+.header-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.header-nav-link {
+  color: var(--primary-navy);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  min-block-size: 40px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.header-nav-link:hover {
+  background-color: var(--bg-surface-low);
+  color: var(--secondary-navy);
+}
+
+.header-nav-cta {
+  background-color: var(--accent-yellow);
+  color: var(--text-on-yellow);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 9px 16px;
+  min-block-size: 40px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.header-nav-cta:hover {
+  background-color: var(--accent-yellow-dark);
+  transform: translateY(-1px);
+}
+
+/* Shared section layout shell */
+.section-shell {
+  max-inline-size: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--spacing-lg);
+}
+
+.section-header-block {
+  max-inline-size: 700px;
+  margin-block-end: var(--spacing-xl);
+}
+
+.section-eyebrow {
+  display: inline-block;
+  background-color: var(--accent-yellow);
+  color: var(--text-on-yellow);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-block-end: var(--spacing-sm);
+}
+
+.section-header-block h2,
+.inquiry-intro h2 {
+  font-size: clamp(1.5rem, 3vw, 2.15rem);
+  color: var(--primary-navy);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-block-end: var(--spacing-sm);
+}
+
+.section-lead {
+  color: var(--text-secondary);
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+/* Section 1: Summary of what we sell (#rubros) */
+.catalog-summary-section {
+  background-color: var(--bg-main);
+  padding: 48px 0;
+}
+
+.rubros-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-md);
+  align-items: stretch;
+}
+
+.rubro-card {
+  height: 100%;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.rubro-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-yellow-dark);
+  box-shadow: var(--shadow-md);
+}
+
+.rubro-card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rubro-icon {
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: var(--radius-md);
+  background-color: var(--accent-yellow);
+  color: var(--text-on-yellow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-block-end: 4px;
+}
+
+.rubro-icon svg {
+  inline-size: 24px;
+  block-size: 24px;
+}
+
+.rubro-card h3 {
+  font-size: 1.12rem;
+  color: var(--primary-navy);
+  font-weight: 700;
+}
+
+.rubro-card p {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.rubro-consult-btn {
+  inline-size: 100%;
+  min-block-size: 44px;
+  background-color: var(--bg-surface-low);
+  color: var(--primary-navy);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.rubro-consult-btn:hover {
+  background-color: var(--primary-navy);
+  border-color: var(--primary-navy);
+  color: #FFFFFF;
+}
+
+/* Section 2: Order / Inquiry Form -> WhatsApp (#consulta-pedido) */
+.inquiry-section {
+  background-color: var(--bg-surface);
+  border-block-start: 1px solid var(--border-light);
+  padding: 56px 0;
+}
+
+.inquiry-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: var(--spacing-xl);
+  align-items: start;
+}
+
+.inquiry-steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-block-start: var(--spacing-lg);
+}
+
+.inquiry-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+}
+
+.step-num {
+  inline-size: 32px;
+  block-size: 32px;
+  border-radius: var(--radius-full);
+  background-color: var(--accent-yellow);
+  color: var(--text-on-yellow);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.inquiry-steps strong {
+  display: block;
+  font-size: 0.96rem;
+  color: var(--primary-navy);
+  margin-block-end: 2px;
+}
+
+.inquiry-steps span {
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.inquiry-card {
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.inquiry-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.inquiry-fieldset legend {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--primary-navy);
+  padding: 0 0 8px 0;
+  margin-block-end: 4px;
+  inline-size: 100%;
+  border-block-end: 1px solid #E2E8F0;
+}
+
+.inquiry-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px;
+  gap: var(--spacing-md);
+  align-items: start;
+}
+
+.inquiry-field-row-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.inquiry-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.inquiry-field label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--primary-navy);
+}
+
+.req-mark {
+  color: #B91C1C;
+}
+
+.field-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.inquiry-field input,
+.inquiry-field textarea {
+  font: inherit;
+  font-size: max(1rem, 1em);
+  line-height: 1.4;
+  color: var(--primary-navy);
+  background-color: #FFFFFF;
+  border: 1.5px solid #94A3B8;
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem;
+  min-block-size: 48px;
+  inline-size: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.inquiry-field textarea {
+  resize: vertical;
+  min-block-size: 96px;
+}
+
+.inquiry-field :is(input, textarea):is(:user-invalid, .user-invalid-fallback) {
+  border-color: #B91C1C;
+  background-color: #FEF2F2;
+}
+
+.error-msg {
+  display: none;
+  color: #B91C1C;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-block-start: 2px;
+}
+
+.inquiry-field :is(input, textarea):is(:user-invalid, .user-invalid-fallback) + .error-msg {
+  display: block;
+}
+
+.inquiry-field :is(input, textarea):user-valid {
+  border-color: #15803D;
+}
+
+.inquiry-submit-btn {
+  min-block-size: 52px;
+  font-size: 1rem;
+}
+
+.inquiry-status {
+  background-color: #ECFDF5;
+  border: 1px solid #10B981;
+  color: #065F46;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.inquiry-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block-start: var(--spacing-sm);
+}
+
+.inquiry-fallback-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 44px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  background-color: #15803D;
+  color: #FFFFFF;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+
+.inquiry-fallback-link:hover {
+  background-color: #166534;
+}
+
+.inquiry-reset-btn {
+  min-block-size: 44px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid #065F46;
+  background: #FFFFFF;
+  color: #065F46;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+@media (max-width: 992px) {
+  .rubros-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inquiry-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--spacing-lg);
+  }
+}
+
+@media (max-width: 768px) {
+  .header-container {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand nav";
+  }
+
+  .brand-wrapper {
+    grid-area: brand;
+  }
+
+  .header-nav-links {
+    grid-area: nav;
+  }
+
+  .header-nav-link {
+    display: none;
+  }
+
+  .section-shell {
+    padding: 0 var(--spacing-md);
+  }
+
+  .catalog-summary-section,
+  .inquiry-section {
+    padding: 36px 0;
+  }
+
+  .rubros-grid,
+  .inquiry-field-row,
+  .inquiry-field-row-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inquiry-card {
+    padding: var(--spacing-md);
+  }
+}
+
+@media (pointer: coarse) {
+  .inquiry-field input,
+  .inquiry-field textarea,
+  .rubro-consult-btn {
+    min-block-size: 52px;
+  }
+}
+
+@media (max-width: 400px) {
+  .header-nav-cta {
+    font-size: 0.8rem;
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+}
